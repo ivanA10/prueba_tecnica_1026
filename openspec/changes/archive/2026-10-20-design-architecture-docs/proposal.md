@@ -67,3 +67,7 @@ Producir, en español, el paquete documental del Ejercicio 1:
 5. Ningún documento hardcodea IDs de modelo LLM ni precios (`grep` negativo).
 6. Consistencia: nombres de servicios, rutas de eventos y claves Redis coinciden con el contrato de `design.md`.
 7. Auditor externo puede leer `docs/adrs/*.md` + `proposal.md` + `design.md` y escribir `docs/audit/design-architecture-docs-audit.md` sin información adicional.
+
+## Estado
+
+Archivado 2026-10-20. Commits bd93d18 (plan) y b20318b (entregables). Auditoría final: APROBADO. Validator: 16/18. Specs canónicas promovidas a `openspec/specs/` (architecture-decision-records, requirements-traceability, architecture-documentation).
