@@ -34,3 +34,6 @@ models/
 infra/env/*.env
 !infra/env/*.env.example
 secrets/
+
+# Engram memory export: kept local, not versioned
+.engram/
