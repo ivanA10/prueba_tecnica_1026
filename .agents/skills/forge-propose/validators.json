@@ -1,0 +1,64 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "forge:propose post-validation policy",
+  "version": "1.0.0",
+  "description": "V1..V6 checks executed AFTER opsx:propose generates artifacts and BEFORE the human approval gate. Any failing check blocks the gate.",
+  "scope_limits": {
+    "max_specs_per_change": 5,
+    "max_files_modified": 25,
+    "max_deps_depth": 3,
+    "max_specs_per_wave": 3,
+    "max_tasks_per_change": 15,
+    "max_tasks_per_wave": 5,
+    "max_waves_per_change": 3
+  },
+  "required_fields_in_plan": [
+    "required_tools",
+    "human_summary",
+    "waves",
+    "contracts_review"
+  ],
+  "checks": [
+    {
+      "id": "V1",
+      "name": "scope-limits",
+      "description": "Output of opsx:propose does not exceed scope_limits.* (specs, tasks, waves, files_modified, deps_depth).",
+      "on_fail": "Report which limit was breached. Abort and instruct to split into multiple changes."
+    },
+    {
+      "id": "V2",
+      "name": "files-exist",
+      "description": "Every spec referenced path resolves on the filesystem (fs.access).",
+      "on_fail": "List invalid paths with the spec they came from. Abort."
+    },
+    {
+      "id": "V3",
+      "name": "contracts-stable",
+      "description": "No spec touches a file or interface listed in change-brief.contracts.stable_list (W4).",
+      "on_fail": "List the violating spec → contract pair. Abort."
+    },
+    {
+      "id": "V4",
+      "name": "required-tools-present",
+      "description": "Plan declares required_tools (W7 contract) for every dispatchable agent in the wave.",
+      "on_fail": "Report missing per_agent entries. Abort."
+    },
+    {
+      "id": "V5",
+      "name": "human-summary-present",
+      "description": "Plan includes a human_summary block (W13 contract) in es-MX prefixed by **En simple:**.",
+      "on_fail": "Report missing human_summary. Abort — DO NOT proceed to approval gate without dual-language summary."
+    },
+    {
+      "id": "V6",
+      "name": "specs-per-wave",
+      "description": "Spec count per wave ≤ scope_limits.max_specs_per_wave (default 3).",
+      "on_fail": "Report wave numbers with excess specs. Abort and split into more waves."
+    }
+  ],
+  "forbidden_patterns": [
+    {"id": "F1", "pattern": "TODO without owner", "regex": "TODO(?!\\s*\\(.+\\))"},
+    {"id": "F2", "pattern": "any-typed function parameter", "regex": "\\bany\\b\\s*[,)]"}
+  ],
+  "report_template": "templates/error-report.md"
+}

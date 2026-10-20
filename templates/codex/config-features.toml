@@ -1,0 +1,23 @@
+# Forge SDD Cycle — Codex project config defaults.
+# Merged into `.codex/config.toml` by installer/install-codex.js.
+#
+# `sandbox_mode` + `approval_policy` are top-level keys (declared before
+# `[features]`) and must NOT live inside a section. Per
+# https://developers.openai.com/codex/concepts/sandboxing the supported values
+# are read-only | workspace-write | danger-full-access for sandbox_mode and
+# untrusted | on-request | never for approval_policy. We default to
+# workspace-write + on-request so subagents inherit a predictable baseline.
+#
+# `[features] hooks = true` enables the lifecycle hooks registered in
+# `.codex/hooks.json`. Canonical key as of Codex v0.128.0 (Apr 30 2026 —
+# PR openai/codex#20522). `codex_hooks` is still recognized as a deprecated
+# alias; if the user already has either key set the installer leaves it alone.
+#
+# The installer is append-only: existing top-level keys + existing keys inside
+# `[features]` are preserved.
+
+sandbox_mode = "workspace-write"
+approval_policy = "on-request"
+
+[features]
+hooks = true

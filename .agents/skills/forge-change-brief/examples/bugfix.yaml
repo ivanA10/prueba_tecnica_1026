@@ -1,0 +1,29 @@
+# Bugfix example — race condition in session refresh
+what: "Reparar race condition en refresh de sesión que invalida tokens válidos bajo carga"
+why:
+  reason: "Reportado por 3 clientes; logs muestran refresh paralelo cuando el token está cerca de expirar"
+  tag: bug
+where:
+  paths:
+    - src/auth/session-manager.ts
+    - src/auth/__tests__/session-refresh.test.ts
+  module: auth
+existing:
+  explored: true
+  findings:
+    - claim: "refreshToken() no usa mutex; dos refresh paralelos pueden ejecutar"
+      evidence: "file:src/auth/session-manager.ts:88"
+    - claim: "Bug similar reportado en sentry issue ABC-1234"
+      evidence: "url:sentry.io/issues/abc-1234"
+    - claim: "Test existente cubre happy path pero no concurrencia"
+      evidence: "file:src/auth/__tests__/session-refresh.test.ts:34"
+contracts:
+  stable_list:
+    - "AuthSession public interface (src/auth/types.ts)"
+proof:
+  test_types: [unit, integration]
+  test_files:
+    - src/auth/__tests__/session-refresh.test.ts
+release_revert:
+  strategy: direct
+  rollback: "Git revert del PR. La fix es additive (agrega mutex) y no cambia contratos."

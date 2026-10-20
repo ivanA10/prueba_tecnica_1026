@@ -1,0 +1,163 @@
+{
+  "autoMemoryEnabled": false,
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
+    "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1",
+    "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "75"
+  },
+  "permissions": {
+    "allow": [
+      "Read",
+      "Glob",
+      "Grep",
+      "Write",
+      "Edit",
+      "Bash",
+      "Agent",
+      "mcp__engram__*",
+      "mcp__context7__*",
+      "Bash(ls:*)",
+      "Bash(cat:*)",
+      "Bash(head:*)",
+      "Bash(tail:*)",
+      "Bash(wc:*)",
+      "Bash(find:*)",
+      "Bash(tree:*)",
+      "Bash(pwd)",
+      "Bash(realpath:*)",
+      "Bash(file:*)",
+      "Bash(stat:*)",
+      "Bash(rg:*)",
+      "Bash(grep:*)",
+      "Bash(git log:*)",
+      "Bash(git diff:*)",
+      "Bash(git status:*)",
+      "Bash(git show:*)",
+      "Bash(git branch:*)",
+      "Bash(git rev-parse:*)",
+      "Bash(bash scripts/sdd-preflight.sh:*)",
+      "Bash(bash scripts/sdd-state-reaper.sh:*)",
+      "Bash(bash installer/lint-md.sh:*)",
+      "mcp__chrome-devtools__*",
+      "mcp__playwright__*"
+    ],
+    "deny": [
+      "EnterWorktree"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'BD=\"${CLAUDE_PROJECT_DIR:-$(pwd)}\"; bash \"$BD/scripts/sdd-trace-hook.sh\" 2>/dev/null || true'",
+            "description": "A6 \u2014 append one line per tool call to the session trace. Consumed by the validator (cascade banned-pattern + already_read_files audit) and the Stop-hook allowlist suggester. Truncated each session by the reaper; never rotated. Anchored + non-blocking."
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'BD=\"${CLAUDE_PROJECT_DIR:-$(pwd)}\"; bash \"$BD/scripts/sdd-cascade-cap.sh\" 2>/dev/null || true'",
+            "description": "W3 cascade cap (PostToolUse): classifies just-completed Bash command, increments cascade depth on validation FAIL, sets sticky banned-flag on package-install / symlink / full-monorepo-test / prettier-recheck. State: .claude/state/cascade-depth.json. Advisory only \u2014 the PreToolUse companion does the hard block."
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'BD=\"${CLAUDE_PROJECT_DIR:-$(pwd)}\"; mkdir -p \"$BD/.claude/state\" 2>/dev/null; bash \"$BD/scripts/sdd-suggest-allowlist.sh\" >\"$BD/.claude/state/last-allowlist-suggestions.log\" 2>&1 || true'",
+            "description": "A6 \u2014 suggest commands run >=3x be added to permissions.allow. Reads the session trace. Stdout redirected to .claude/state/ so Claude Code does not attempt to JSON-parse the report."
+          },
+          {
+            "type": "command",
+            "command": "bash -c 'BD=\"${CLAUDE_PROJECT_DIR:-$(pwd)}\"; mkdir -p \"$BD/.claude/state\" 2>/dev/null; bash \"$BD/scripts/sdd-cleanup-orphans.sh\" >\"$BD/.claude/state/last-cleanup-orphans.log\" 2>&1 || true'",
+            "description": "Kill orphan browser/MCP processes at session end (anthropics/claude-code#15861). Stdout redirected to log file."
+          },
+          {
+            "type": "command",
+            "command": "bash -c 'BD=\"${CLAUDE_PROJECT_DIR:-$(pwd)}\"; bash \"$BD/scripts/sdd-memory-budget-reset.sh\" 2>/dev/null || true'",
+            "description": "W2 \u2014 Reset per-turn Engram budget counter at session/turn end. Anchored + non-blocking."
+          },
+          {
+            "type": "command",
+            "command": "bash -c 'BD=\"${CLAUDE_PROJECT_DIR:-$(pwd)}\"; bash \"$BD/scripts/sdd-cascade-reset.sh\" 2>/dev/null || true'",
+            "description": "W3 \u2014 Reset cascade-depth state at session/turn end. Anchored + non-blocking."
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'BD=\"${CLAUDE_PROJECT_DIR:-$(pwd)}\"; bash \"$BD/scripts/sdd-validator-readonly-hook.sh\"'",
+            "description": "Read-only enforcement for the validator subagent (reads agent_type from stdin payload). Path anchored to $CLAUDE_PROJECT_DIR so the hook survives non-root CWDs."
+          },
+          {
+            "type": "command",
+            "command": "bash -c 'BD=\"${CLAUDE_PROJECT_DIR:-$(pwd)}\"; bash \"$BD/scripts/sdd-pre-implement-hook.sh\"'",
+            "description": "B1 \u2014 branch gate: refuse impl writes outside feat/<change> or feat/<bundle>. Anchored."
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'BD=\"${CLAUDE_PROJECT_DIR:-$(pwd)}\"; bash \"$BD/scripts/sdd-scope-check.sh\"'",
+            "description": "B3 \u2014 lint scope guard: block repo-wide lint/format that exceeds task scope. Anchored."
+          },
+          {
+            "type": "command",
+            "command": "bash -c 'BD=\"${CLAUDE_PROJECT_DIR:-$(pwd)}\"; bash \"$BD/scripts/sdd-cascade-cap.sh\"'",
+            "description": "W3 cascade cap (PreToolUse): hard-blocks the next Bash call when cascade depth > 1 OR a banned mid-wave pattern (pnpm install / symlink debug / full-monorepo test / repeat prettier --check) was triggered earlier in this wave. State: .claude/state/cascade-depth.json. See agent_docs/cascade-policy.md."
+          }
+        ]
+      },
+      {
+        "matcher": "mcp__engram__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'BD=\"${CLAUDE_PROJECT_DIR:-$(pwd)}\"; bash \"$BD/scripts/sdd-memory-budget.sh\"'",
+            "description": "W2 \u2014 Per-turn Engram budget enforcement. Blocks 3rd mem_search / 2nd mem_get_observation / 2nd mem_context. Warns on 3rd mem_save. See agent_docs/memory-budget.md."
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'BD=\"${CLAUDE_PROJECT_DIR:-$(pwd)}\"; bash \"$BD/.claude/hooks/rtk-rewrite.sh\"'",
+            "description": "rtk \u2014 advisory hint to prefix Bash commands with rtk for token compression (no-op when rtk binary missing). Run `rtk init -g` for protocol-correct automatic rewriting."
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'BD=\"${CLAUDE_PROJECT_DIR:-$(pwd)}\"; bash \"$BD/scripts/sdd-state-reaper.sh\" 2>/dev/null || true'",
+            "description": "Prune stale .claude/state clutter (legacy *.bak, retired perf logs) and truncate the session trace at session start. Anchored + non-blocking."
+          }
+        ]
+      }
+    ]
+  }
+}

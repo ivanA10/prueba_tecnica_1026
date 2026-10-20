@@ -1,0 +1,60 @@
+{
+  "$schema": "https://raw.githubusercontent.com/iNBest-cloud/inbest-sdd-cycle/main/src/schemas/forge-config.schema.json",
+  "version": "3.0.0",
+  "repo_role": "monorepo",
+  "engram": {
+    "scope": "auto",
+    "tier_policy": "v3-default",
+    "shared_scope_required_tags": [
+      "repo:<name>"
+    ],
+    "decay_days_tier2": 30,
+    "decay_days_tier3": 60
+  },
+  "wave_policy": {
+    "max_specs_per_wave": 3,
+    "synth_min_explores": 2,
+    "synth_raw_token_threshold": 3000,
+    "autocompact_pct": 75
+  },
+  "browser_strategy": {
+    "default": "agent-browser",
+    "playwright_enabled": false,
+    "fallback": "manual"
+  },
+  "agent_denylist": {
+    "tester-back": {
+      "mcp": [
+        "figma",
+        "browser-mcp"
+      ]
+    },
+    "tester-front": {
+      "mcp": [
+        "database-mcp"
+      ]
+    },
+    "backend": {
+      "mcp": [
+        "figma"
+      ]
+    },
+    "agent-prep": {
+      "tools": [
+        "edit",
+        "write"
+      ]
+    },
+    "researcher": {
+      "tools": [
+        "edit",
+        "write",
+        "bash"
+      ]
+    }
+  },
+  "human_language": {
+    "primary": "es-MX",
+    "require_human_summary": true
+  }
+}

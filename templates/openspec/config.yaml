@@ -1,0 +1,47 @@
+# Forge SDD Cycle — OpenSpec Configuration
+# This profile configures OpenSpec for the Forge two-layer workflow.
+
+profile: forge-sdd
+workflows:
+  - propose
+  - explore
+  - new
+  - continue
+  - apply
+  - ff
+  - sync
+  - archive
+  - bulk-archive
+  - verify
+  - onboard
+
+settings:
+  specs_dir: openspec/specs
+  changes_dir: openspec/changes
+  auto_archive: false
+  require_verify_before_archive: true
+
+# Multi-repo configuration (optional — omit for monorepo/standalone projects).
+# Presence of `repos:` flips preflight MULTI_REPO=true and switches Modes 6/6b
+# to the per-member bootstrap branch (one audit + 📋 gate per member; each
+# member repo gets its own project-stack + repo-pairings in ITS AGENTS.md; the
+# coordination hub keeps only the hub-repo-map). Paths are relative to the
+# coordination repo root. `role` must match the member's installed
+# --repo-role (frontend | backend | standalone).
+# repos:
+#   api:
+#     path: ../api              # relative path from coordination repo
+#     role: backend
+#     branch_prefix: feat/      # git branch naming
+#   web:
+#     path: ../web
+#     role: frontend
+#     branch_prefix: feat/
+# contracts_dir: openspec/contracts
+#
+# wave_policy (multi-repo runtime): contract polling budget for member
+# teammates waiting on `contract/<endpoint-slug>` topics. On exhaustion the
+# teammate returns `BLOCKED [CONTRACT] missing: contract/<endpoint-slug>`.
+# wave_policy:
+#   contract_poll_attempts: 10   # default
+#   contract_poll_interval_s: 30 # default → 10 × 30s = 5 min ceiling

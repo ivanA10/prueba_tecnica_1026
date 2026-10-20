@@ -1,0 +1,103 @@
+{
+  "_forge_version": "__VERSION__",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'cd \"$(git rev-parse --show-toplevel 2>/dev/null || pwd)\" && bash scripts/sdd-preflight.sh'",
+            "timeout": 30,
+            "statusMessage": "SDD preflight"
+          },
+          {
+            "type": "command",
+            "command": "bash -c 'cd \"$(git rev-parse --show-toplevel 2>/dev/null || pwd)\" && bash scripts/sdd-state-reaper.sh 2>/dev/null || true'",
+            "timeout": 10,
+            "statusMessage": "Prune stale state clutter"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "^(Write|Edit|apply_patch)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'cd \"$(git rev-parse --show-toplevel 2>/dev/null || pwd)\" && bash scripts/sdd-pre-implement-hook.sh'",
+            "timeout": 30,
+            "statusMessage": "B1 — branch gate"
+          }
+        ]
+      },
+      {
+        "matcher": "^Bash$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'cd \"$(git rev-parse --show-toplevel 2>/dev/null || pwd)\" && bash scripts/sdd-scope-check.sh'",
+            "timeout": 30,
+            "statusMessage": "B3 — scope guard"
+          },
+          {
+            "type": "command",
+            "command": "bash -c 'cd \"$(git rev-parse --show-toplevel 2>/dev/null || pwd)\" && bash scripts/sdd-cascade-cap.sh'",
+            "timeout": 15,
+            "statusMessage": "W3 — cascade cap (pre)"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'cd \"$(git rev-parse --show-toplevel 2>/dev/null || pwd)\" && bash scripts/sdd-trace-hook.sh'",
+            "timeout": 10,
+            "statusMessage": "A6 — trace log"
+          }
+        ]
+      },
+      {
+        "matcher": "^Bash$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'cd \"$(git rev-parse --show-toplevel 2>/dev/null || pwd)\" && bash scripts/sdd-cascade-cap.sh 2>/dev/null || true'",
+            "timeout": 15,
+            "statusMessage": "W3 — cascade cap (post)"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'BD=\"$(git rev-parse --show-toplevel 2>/dev/null || pwd)\"; mkdir -p \"$BD/.claude/state\" 2>/dev/null; bash \"$BD/scripts/sdd-suggest-allowlist.sh\" >\"$BD/.claude/state/last-allowlist-suggestions.log\" 2>&1 || true'",
+            "timeout": 15,
+            "statusMessage": "A6 — suggest allowlist"
+          },
+          {
+            "type": "command",
+            "command": "bash -c 'BD=\"$(git rev-parse --show-toplevel 2>/dev/null || pwd)\"; mkdir -p \"$BD/.claude/state\" 2>/dev/null; bash \"$BD/scripts/sdd-cleanup-orphans.sh\" >\"$BD/.claude/state/last-cleanup-orphans.log\" 2>&1 || true'",
+            "timeout": 15,
+            "statusMessage": "Cleanup orphan processes"
+          },
+          {
+            "type": "command",
+            "command": "bash -c 'BD=\"$(git rev-parse --show-toplevel 2>/dev/null || pwd)\"; bash \"$BD/scripts/sdd-cascade-reset.sh\" 2>/dev/null || true'",
+            "timeout": 10,
+            "statusMessage": "W3 — cascade reset"
+          }
+        ]
+      }
+    ]
+  }
+}

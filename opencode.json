@@ -1,0 +1,39 @@
+{
+  "permission": {
+    "tools": {
+      "mcp__chrome-devtools__*": true,
+      "mcp__context7__*": true,
+      "mcp__engram__*": true,
+      "mcp__playwright__*": true
+    }
+  },
+  "mcpServers": {
+    "chrome-devtools": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "chrome-devtools-mcp@latest"
+      ]
+    },
+    "context7": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@upstash/context7-mcp@latest"
+      ]
+    },
+    "engram": {
+      "command": "engram",
+      "args": [
+        "mcp"
+      ]
+    },
+    "playwright": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@playwright/mcp@latest"
+      ]
+    }
+  }
+}

@@ -1,0 +1,61 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SynthesizerOutput",
+  "type": "object",
+  "required": ["executive_summary", "findings", "unknowns", "contradictions", "human_summary"],
+  "additionalProperties": false,
+  "properties": {
+    "executive_summary": {
+      "type": "string",
+      "minLength": 20,
+      "maxLength": 500,
+      "description": "≤500 chars. State the consensus position + the biggest open question."
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["claim", "evidence", "confidence"],
+        "additionalProperties": false,
+        "properties": {
+          "claim": { "type": "string", "minLength": 10 },
+          "evidence": {
+            "type": "string",
+            "pattern": "^(file:|engram:|url:).+"
+          },
+          "confidence": { "enum": ["high", "medium", "low"] },
+          "promoted_to_engram": { "type": "boolean" },
+          "topic_key": { "type": "string" }
+        }
+      }
+    },
+    "unknowns": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 5 },
+      "maxItems": 5,
+      "description": "Open questions the raw outputs could not answer. ≤5; if there are more, pick the 5 most blocking."
+    },
+    "contradictions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["sources", "issue"],
+        "additionalProperties": false,
+        "properties": {
+          "sources": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 },
+            "minItems": 2
+          },
+          "issue": { "type": "string", "minLength": 10 }
+        }
+      }
+    },
+    "human_summary": {
+      "type": "string",
+      "pattern": "^\\*\\*En simple:\\*\\*",
+      "minLength": 20,
+      "description": "es-MX summary prefixed by **En simple:**. W13 contract."
+    }
+  }
+}

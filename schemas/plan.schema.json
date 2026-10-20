@@ -1,0 +1,109 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/iNBest-cloud/inbest-sdd-cycle/main/src/schemas/plan.schema.json",
+  "title": "ForgePlan",
+  "description": "Plan emitted by forge:propose / opsx:propose, validated post-creation by forge:propose validators.json (W5) and consumed by forge:orchestrate dispatch (W7).",
+  "type": "object",
+  "required": ["plan_id", "change_name", "waves", "required_tools", "human_summary", "contracts_review"],
+  "properties": {
+    "plan_id": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}-[a-z0-9-]+$",
+      "description": "YYYY-MM-DD-<change-name>"
+    },
+    "change_name": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{2,}$",
+      "description": "kebab-case verb-scope-outcome; never numeric"
+    },
+    "human_summary": {
+      "type": "string",
+      "pattern": "^\\*\\*En simple:\\*\\*",
+      "minLength": 20,
+      "description": "W13 contract — es-MX, prefix **En simple:**"
+    },
+    "contracts_review": {
+      "type": "object",
+      "required": ["stable_list", "reviewed_at"],
+      "properties": {
+        "stable_list": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "reviewed_at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "waves": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 3,
+      "items": { "$ref": "#/definitions/Wave" }
+    },
+    "required_tools": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "per_agent": {
+          "type": "object",
+          "patternProperties": {
+            "^(planner|researcher|synthesizer|frontend|backend|database|tester-front|tester-back|validator|github-ops|agent-prep|agent-sync|devstart|bugfix-pr)$": {
+              "$ref": "#/definitions/AgentToolBudget"
+            }
+          },
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  "definitions": {
+    "Wave": {
+      "type": "object",
+      "required": ["wave", "specs", "required_tools"],
+      "additionalProperties": false,
+      "properties": {
+        "wave": { "type": "integer", "minimum": 1 },
+        "specs": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1,
+          "maxItems": 3,
+          "description": "MAX_SPECS_PER_WAVE = 3 (V6)"
+        },
+        "required_tools": {
+          "type": "object",
+          "required": ["per_agent"],
+          "additionalProperties": false,
+          "properties": {
+            "per_agent": {
+              "type": "object",
+              "patternProperties": {
+                "^(planner|researcher|synthesizer|frontend|backend|database|tester-front|tester-back|validator|github-ops|agent-prep|agent-sync|devstart|bugfix-pr)$": {
+                  "$ref": "#/definitions/AgentToolBudget"
+                }
+              },
+              "additionalProperties": false
+            }
+          }
+        }
+      }
+    },
+    "AgentToolBudget": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mcp": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true,
+          "description": "MCP server names (e.g. engram, context7, figma)"
+        },
+        "skills": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^forge-[a-z][a-z0-9-]*$" },
+          "uniqueItems": true,
+          "description": "Skill identifiers (forge-*) the agent may load"
+        }
+      }
+    }
+  }
+}

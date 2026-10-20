@@ -1,0 +1,31 @@
+# Feature example — Excel export from analytics screen
+what: "Agregar exportación de reportes a Excel desde la pantalla de analytics"
+why:
+  reason: "Cliente solicita compartir reportes con stakeholders no técnicos sin instalar nada extra"
+  tag: feature
+where:
+  paths:
+    - src/features/analytics/
+    - src/lib/export/
+  module: analytics
+existing:
+  explored: true
+  findings:
+    - claim: "Ya existe CSV export en analytics-table.tsx"
+      evidence: "file:src/features/analytics/analytics-table.tsx:142"
+    - claim: "No hay dependencia previa de excel writer"
+      evidence: "file:package.json"
+    - claim: "Decisión previa: usamos exceljs en otro módulo"
+      evidence: "engram:adr/004"
+contracts:
+  stable_list:
+    - "AnalyticsRowSchema (api/types/analytics.ts)"
+    - "GET /api/analytics endpoint signature"
+proof:
+  test_types: [unit, e2e]
+  test_files:
+    - src/features/analytics/__tests__/export-excel.test.ts
+    - e2e/analytics-export.spec.ts
+release_revert:
+  strategy: feature-flag
+  rollback: "Toggle flag 'export.excel.enabled' a false. Sin migración de datos."

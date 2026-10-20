@@ -1,0 +1,19 @@
+{
+  "harness_version": "3.0.0",
+  "repo_role": "monorepo",
+  "files": {
+    "AGENTS.md": {
+      "boundaries": "1.0.0",
+      "commands": "1.0.0",
+      "memory": "1.2.0",
+      "project": "1.0.0",
+      "project-stack": "1.1.0",
+      "sdd-workflow": "1.4.1"
+    },
+    "CLAUDE.md": {
+      "agents-import": "1.0.0",
+      "claude-specifics": "1.0.0",
+      "orchestrator-identity": "1.1.0"
+    }
+  }
+}

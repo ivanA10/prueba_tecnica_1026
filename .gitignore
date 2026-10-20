@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+
+# Coverage (root and nested packages), but keep docs/coverage/
+coverage/
+!docs/coverage/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Logs and OS files
+*.log
+.DS_Store
+
+# Tool caches
+.turbo/
+.vite/
+.cache/
+
+# ML model caches
+models/
+
+# SDD / harness runtime state
+.claude/state/
+.sdd/

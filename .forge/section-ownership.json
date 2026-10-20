@@ -1,0 +1,52 @@
+{
+  "budgets": {
+    "hub_agents_md_max_lines": 180,
+    "member_agents_md_max_lines": 200
+  },
+  "sections": {
+    "agents-import": {
+      "owner": "shared",
+      "max_lines": 5
+    },
+    "boundaries": {
+      "owner": "shared",
+      "max_lines": 15
+    },
+    "claude-specifics": {
+      "owner": "shared",
+      "max_lines": 20
+    },
+    "commands": {
+      "owner": "member",
+      "max_lines": 25
+    },
+    "hub-repo-map": {
+      "owner": "hub",
+      "max_lines": 60
+    },
+    "memory": {
+      "owner": "shared",
+      "max_lines": 45
+    },
+    "orchestrator-identity": {
+      "owner": "hub",
+      "max_lines": 15
+    },
+    "project": {
+      "owner": "shared",
+      "max_lines": 12
+    },
+    "project-stack": {
+      "owner": "member",
+      "max_lines": 45
+    },
+    "repo-pairings": {
+      "owner": "member",
+      "max_lines": 35
+    },
+    "sdd-workflow": {
+      "owner": "shared",
+      "max_lines": 45
+    }
+  }
+}
