@@ -1,0 +1,9 @@
+packages:
+  - 'apps/*'
+  - 'packages/*'
+
+# pnpm 11+/12 aborta la instalación si hay scripts de build sin decidir.
+# Ninguno es necesario (watcher nativo opcional de Jest; unrs-resolver usa binario prebuilt por optionalDependencies).
+allowBuilds:
+  '@parcel/watcher': false
+  unrs-resolver: false

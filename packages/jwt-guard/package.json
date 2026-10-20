@@ -1,0 +1,34 @@
+{
+  "name": "@toka/jwt-guard",
+  "version": "0.0.0",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "node ../../jest.run.js",
+    "lint": "eslint src"
+  },
+  "dependencies": {
+    "jose": "5.10.0"
+  },
+  "peerDependencies": {
+    "@nestjs/common": "^11.0.0",
+    "ioredis": "^5.0.0",
+    "reflect-metadata": "^0.2.0",
+    "rxjs": "^7.8.0"
+  },
+  "peerDependenciesMeta": {
+    "ioredis": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@nestjs/common": "11.2.7",
+    "@types/express": "5.0.6",
+    "ioredis": "5.11.1",
+    "reflect-metadata": "0.2.2",
+    "rxjs": "7.8.2"
+  }
+}

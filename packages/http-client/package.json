@@ -1,0 +1,13 @@
+{
+  "name": "@toka/http-client",
+  "version": "0.0.0",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "node ../../jest.run.js",
+    "lint": "eslint src"
+  }
+}

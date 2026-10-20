@@ -29,3 +29,11 @@ models/
 # SDD / harness runtime state
 .claude/state/
 .sdd/
+
+# Per-service env files and generated secrets (templates stay versioned)
+infra/env/*.env
+!infra/env/*.env.example
+secrets/
+
+# Engram memory export: kept local, not versioned
+.engram/
