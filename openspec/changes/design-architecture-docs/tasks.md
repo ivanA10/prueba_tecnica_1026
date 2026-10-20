@@ -7,7 +7,7 @@
 
 ## Wave 0 — Decisiones (ADRs) y trazabilidad
 
-- [ ] 1.1 Redactar ADR-001, ADR-002 y ADR-003 (monorepo TS/NestJS; límites de servicio + BD por servicio; auth JWT RS256/JWKS + RBAC)
+- [x] 1.1 Redactar ADR-001, ADR-002 y ADR-003 (monorepo TS/NestJS; límites de servicio + BD por servicio; auth JWT RS256/JWKS + RBAC)
   - **Change:** design-architecture-docs
   - **Spec:** `openspec/changes/design-architecture-docs/specs/architecture-decision-records.md`
   - **Spec wave slice:** n/a
@@ -18,7 +18,7 @@
   - **Verification gate:** cmd:for f in docs/adrs/ADR-001-*.md docs/adrs/ADR-002-*.md docs/adrs/ADR-003-*.md; do test -f "$f" && grep -q '^id: ADR-' "$f" && grep -q '^tier: 0' "$f" && grep -q '^## Context' "$f" && grep -q '^## Decision' "$f" && grep -q '^## Consequences' "$f" && grep -q '^### Negativas y riesgos' "$f" && grep -q '^## Alternatives considered' "$f" && grep -q 'Por qu.* se descart' "$f" && test "$(grep -c '^### Alternativa' "$f")" -ge 2 && grep -q '^## Implementaci.*n' "$f" && grep -Eq 'Implementado en|Evoluci.*n' "$f" || exit 1; done && grep -q 'auth:deny:jti' docs/adrs/ADR-002-*.md && grep -qi 'prefijo' docs/adrs/ADR-002-*.md && grep -q 'internal/credentials' docs/adrs/ADR-002-*.md && grep -q 'client_credentials' docs/adrs/ADR-003-*.md && grep -q '\bkid\b' docs/adrs/ADR-003-*.md && grep -q '\baud\b' docs/adrs/ADR-003-*.md && grep -q 'argon2id' docs/adrs/ADR-003-*.md && grep -Eqi 'fail-open|falla abierto|fallar abierto' docs/adrs/ADR-003-*.md && grep -q 'user_roles_projection' docs/adrs/ADR-003-*.md && grep -q 'validaci.*n distribuida' docs/adrs/ADR-003-*.md
   - **mockup_ref:** n/a
 
-- [ ] 1.2 Redactar ADR-004, ADR-005 y ADR-006 (mensajería RabbitMQ; REST + resiliencia; Clean Architecture + DDD + CQRS ligero)
+- [x] 1.2 Redactar ADR-004, ADR-005 y ADR-006 (mensajería RabbitMQ; REST + resiliencia; Clean Architecture + DDD + CQRS ligero)
   - **Change:** design-architecture-docs
   - **Spec:** `openspec/changes/design-architecture-docs/specs/architecture-decision-records.md`
   - **Spec wave slice:** n/a
@@ -29,7 +29,7 @@
   - **Verification gate:** cmd:for f in docs/adrs/ADR-004-*.md docs/adrs/ADR-005-*.md docs/adrs/ADR-006-*.md; do test -f "$f" && grep -q '^id: ADR-' "$f" && grep -q '^tier: 0' "$f" && grep -q '^## Context' "$f" && grep -q '^## Decision' "$f" && grep -q '^## Consequences' "$f" && grep -q '^### Negativas y riesgos' "$f" && grep -q '^## Alternatives considered' "$f" && grep -q 'Por qu.* se descart' "$f" && test "$(grep -c '^### Alternativa' "$f")" -ge 2 && grep -q '^## Implementaci.*n' "$f" && grep -Eq 'Implementado en|Evoluci.*n' "$f" || exit 1; done && grep -q 'toka.events' docs/adrs/ADR-004-*.md && grep -q 'user[.]#' docs/adrs/ADR-004-*.md && grep -q 'auth.user-projection' docs/adrs/ADR-004-*.md && grep -q 'x-retry-count' docs/adrs/ADR-004-*.md && grep -qi 'outbox' docs/adrs/ADR-004-*.md && grep -q 'aggregateVersion' docs/adrs/ADR-004-*.md && grep -q 'audit.fallback' docs/adrs/ADR-004-*.md && grep -qi 'circuit breaker' docs/adrs/ADR-005-*.md && grep -q 'audit-service' docs/adrs/ADR-006-*.md && grep -q 'CQRS' docs/adrs/ADR-006-*.md
   - **mockup_ref:** n/a
 
-- [ ] 1.3 Redactar ADR-007, ADR-008, ADR-009 y ADR-010 (observabilidad/calidad; puerto LLM; RAG local; frontend + reverse proxy)
+- [x] 1.3 Redactar ADR-007, ADR-008, ADR-009 y ADR-010 (observabilidad/calidad; puerto LLM; RAG local; frontend + reverse proxy)
   - **Change:** design-architecture-docs
   - **Spec:** `openspec/changes/design-architecture-docs/specs/architecture-decision-records.md`
   - **Spec wave slice:** n/a
@@ -40,7 +40,7 @@
   - **Verification gate:** cmd:for f in docs/adrs/ADR-007-*.md docs/adrs/ADR-008-*.md docs/adrs/ADR-009-*.md docs/adrs/ADR-010-*.md; do test -f "$f" && grep -q '^id: ADR-' "$f" && grep -q '^tier: 0' "$f" && grep -q '^## Context' "$f" && grep -q '^## Decision' "$f" && grep -q '^## Consequences' "$f" && grep -q '^### Negativas y riesgos' "$f" && grep -q '^## Alternatives considered' "$f" && grep -q 'Por qu.* se descart' "$f" && test "$(grep -c '^### Alternativa' "$f")" -ge 2 && grep -q '^## Implementaci.*n' "$f" && grep -Eq 'Implementado en|Evoluci.*n' "$f" || exit 1; done && test -f docs/adrs/ADR-010-frontend-react-rtk-nginx-gateway.md && grep -q 'correlationId' docs/adrs/ADR-007-*.md && grep -q 'latencyMs' docs/adrs/ADR-007-*.md && grep -q 'observability' docs/adrs/ADR-007-*.md && grep -qi 'prompt injection' docs/adrs/ADR-008-*.md && grep -q 'LLM_PRICE_INPUT_PER_MTOK' docs/adrs/ADR-008-*.md && grep -q '\b256\b' docs/adrs/ADR-009-*.md && grep -qi 'debian' docs/adrs/ADR-009-*.md && grep -q 'HttpOnly' docs/adrs/ADR-010-*.md && grep -q 'import.meta.env' docs/adrs/ADR-010-*.md && grep -q 'limit_req' docs/adrs/ADR-010-*.md && grep -q 'audit.fallback' docs/adrs/ADR-007-*.md && ! grep -rEq 'claude-(opus|sonnet|haiku)|[$][0-9]+([.][0-9]+)? ?(/|per|por)' docs/adrs
   - **mockup_ref:** n/a
 
-- [ ] 1.4 Crear la matriz de trazabilidad `docs/traceability.md` (PDF → cambio → artefacto, 5 ejercicios)
+- [x] 1.4 Crear la matriz de trazabilidad `docs/traceability.md` (PDF → cambio → artefacto, 5 ejercicios)
   - **Change:** design-architecture-docs
   - **Spec:** `openspec/changes/design-architecture-docs/specs/requirements-traceability.md`
   - **Spec wave slice:** n/a
@@ -53,7 +53,7 @@
 
 ## Wave 1 — Documentación de arquitectura (`docs/architecture/`)
 
-- [ ] 2.1 Crear `docs/architecture/01-diagramas.md` (C4 de contenedores + 3 secuencias Mermaid)
+- [x] 2.1 Crear `docs/architecture/01-diagramas.md` (C4 de contenedores + 3 secuencias Mermaid)
   - **Change:** design-architecture-docs
   - **Spec:** `openspec/changes/design-architecture-docs/specs/architecture-documentation.md`
   - **Spec wave slice:** n/a
@@ -64,7 +64,7 @@
   - **Verification gate:** cmd:f=docs/architecture/01-diagramas.md; test -f "$f" && test "$(grep -c '^...mermaid' "$f")" -ge 4 && test "$(grep -c 'sequenceDiagram' "$f")" -ge 3 && for s in web auth-service user-service role-service audit-service ai-agent-service postgres mongo redis rabbitmq qdrant; do grep -qi "$s" "$f" || exit 1; done && grep -q 'user.created' "$f" && grep -qi 'jwks' "$f" && grep -q 'auth.user-projection' "$f" && grep -qi 'outbox' "$f"
   - **mockup_ref:** n/a
 
-- [ ] 2.2 Crear `docs/architecture/02-justificacion-tecnica.md` (justificación por tecnología/patrón + `## Estrategia multi-DB`)
+- [x] 2.2 Crear `docs/architecture/02-justificacion-tecnica.md` (justificación por tecnología/patrón + `## Estrategia multi-DB`)
   - **Change:** design-architecture-docs
   - **Spec:** `openspec/changes/design-architecture-docs/specs/architecture-documentation.md`
   - **Spec wave slice:** n/a
@@ -75,7 +75,7 @@
   - **Verification gate:** cmd:f=docs/architecture/02-justificacion-tecnica.md; test -f "$f" && grep -q '^## Estrategia multi-DB' "$f" && grep -q 'Alternativa considerada' "$f" && for t in NestJS Prisma Mongoose Redis RabbitMQ Qdrant pino Jest; do grep -q "$t" "$f" || exit 1; done && for n in 001 002 003 004 005 006 007 008 009 010; do grep -q "ADR-$n" "$f" || exit 1; done && ! grep -Eq 'claude-(opus|sonnet|haiku)|[$][0-9]+([.][0-9]+)? ?(/|per|por)' "$f"
   - **mockup_ref:** n/a
 
-- [ ] 2.3 Crear `docs/architecture/03-flujo-de-datos.md` y `docs/architecture/07-resiliencia.md` (flujo de datos síncrono/asíncrono; resiliencia y manejo de fallos)
+- [x] 2.3 Crear `docs/architecture/03-flujo-de-datos.md` y `docs/architecture/07-resiliencia.md` (flujo de datos síncrono/asíncrono; resiliencia y manejo de fallos)
   - **Change:** design-architecture-docs
   - **Spec:** `openspec/changes/design-architecture-docs/specs/architecture-documentation.md`
   - **Spec wave slice:** n/a
@@ -86,7 +86,7 @@
   - **Verification gate:** cmd:a=docs/architecture/03-flujo-de-datos.md; b=docs/architecture/07-resiliencia.md; test -f "$a" && test -f "$b" && grep -q '^## Comunicaci.*n s.*ncrona' "$a" && grep -q '^## Comunicaci.*n as.*ncrona' "$a" && grep -q 'toka.events' "$a" && grep -q 'audit.events' "$a" && grep -q '^## Matriz de fallos' "$b" && grep -q '^## Compensaci.*n del alta' "$b" && grep -q '^## Reintentos y DLQ' "$b" && grep -qi 'circuit breaker' "$b" && grep -q 'DLQ' "$b" && grep -q 'x-retry-count' "$b" && grep -qi 're-drive' "$b" && grep -qi 'outbox' "$b" && grep -q 'audit.fallback' "$b" && grep -q 'aggregateVersion' "$b" && grep -Eqi 'redis ca.*do' "$b" && grep -q 'ADR-004' "$b" && grep -q 'ADR-005' "$b"
   - **mockup_ref:** n/a
 
-- [ ] 2.4 Crear `docs/architecture/04-docker-compose-diseno.md` y `docs/architecture/06-seguridad-escalabilidad.md` (diseño de compose; seguridad y escalabilidad)
+- [x] 2.4 Crear `docs/architecture/04-docker-compose-diseno.md` y `docs/architecture/06-seguridad-escalabilidad.md` (diseño de compose; seguridad y escalabilidad)
   - **Change:** design-architecture-docs
   - **Spec:** `openspec/changes/design-architecture-docs/specs/architecture-documentation.md`
   - **Spec wave slice:** n/a
@@ -97,7 +97,7 @@
   - **Verification gate:** cmd:a=docs/architecture/04-docker-compose-diseno.md; b=docs/architecture/06-seguridad-escalabilidad.md; test -f "$a" && test -f "$b" && test "$(grep -c '^...yaml' "$a")" -ge 1 && for s in web auth-service user-service role-service audit-service ai-agent-service postgres mongo redis rabbitmq qdrant; do grep -q "^  $s:" "$a" || exit 1; done && grep -q 'service_healthy' "$a" && grep -q 'observability' "$a" && grep -q '^## OWASP' "$b" && grep -q '^## Escalabilidad' "$b" && grep -q 'RS256' "$b" && grep -q 'HttpOnly' "$b" && grep -q 'client_credentials' "$b" && grep -q '\bkid\b' "$b" && grep -q 'limit_req' "$b" && grep -q 'argon2id' "$b" && grep -qi 'prompt injection' "$b"
   - **mockup_ref:** n/a
 
-- [ ] 2.5 Crear `docs/architecture/05-ddd-clean-cqrs.md`, `docs/architecture/08-integracion-ia-rag.md` y `docs/architecture/README.md` (DDD/Clean/CQRS; integración IA/RAG; índice con mapeo al Ejercicio 1)
+- [x] 2.5 Crear `docs/architecture/05-ddd-clean-cqrs.md`, `docs/architecture/08-integracion-ia-rag.md` y `docs/architecture/README.md` (DDD/Clean/CQRS; integración IA/RAG; índice con mapeo al Ejercicio 1)
   - **Change:** design-architecture-docs
   - **Spec:** `openspec/changes/design-architecture-docs/specs/architecture-documentation.md`
   - **Spec wave slice:** n/a

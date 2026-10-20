@@ -241,3 +241,211 @@ Es aceptable para el alcance de la prueba, por sus propios méritos:
 **APROBADO CON OBSERVACIONES.** Los 3 hallazgos de severidad Alta de la ronda 1 (H1, H3, H4) quedan cerrados, con evidencia en el contrato y con gates que los hacen cumplir. 17 de 20 hallazgos están cerrados y no queda ninguno abierto. La desviación del outbox es razonable para el alcance si se añade la mitigación de log de fallback.
 
 Las correcciones introducen 3 problemas de severidad Media, todos en la capa asíncrona: la reconciliación de auth (N1), el orden de eventos (N2) y la política ante la caída de Redis (N3). Se recomienda enmendar `design.md › Alta de usuario`, `› Eventos` y `› Redis` antes de despachar las tareas 1.1 y 1.2, porque ADR-002/003/004 se derivarán literalmente de esas secciones. Son cambios de pocas líneas y no alteran el stack ni las decisiones principales.
+
+## Auditoría de entregables (ronda 3)
+
+- **Fecha:** 2026-10-20 · **Auditor:** el mismo (modelo Opus, externo).
+- **Fuentes revisadas:**
+  - `docs/adrs/ADR-001` … `ADR-010`.
+  - `docs/architecture/01` … `08` y `README.md`.
+  - `docs/traceability.md`.
+  - El contrato vigente `openspec/changes/design-architecture-docs/design.md`.
+  - El PDF.
+- **Contexto:** el validador interno dio PASS con 16/18. Esta ronda no repite sus checks estructurales; evalúa el contenido.
+
+### Fidelidad al contrato y regresiones (H1–H20, N1–N3)
+
+Ningún hallazgo previo se reintroduce:
+- **Bindings y colas:** los bindings usan `#` (ADR-004, 01, 03) y existe la cola `auth.user-projection`.
+- **Redis y revocación:** la excepción `auth:deny:jti:*` está declarada, con fail-open acotado (ADR-003 y 07 › Matriz).
+- **Agente:** reenvía el JWT del llamante (ADR-008, 08 › Identidad y datos).
+- **RAG:** chunks ≤256 y sin PII en el vector store (ADR-009).
+- **Saga:** auth no hace barrido propio (N1: ADR-002 punto 7, 07). El orden por `aggregateVersion` cubre N2 (ADR-004 › Orden).
+- **Outbox:** solo en user-service, con `audit.fallback` como respaldo para auth.
+
+Hay degradaciones respecto de la ronda 2, pero **declaradas honestamente como Evolución** en la sección `## Implementación` de cada ADR y en `traceability.md` › Convenciones:
+- ACL de Redis (antes H17 Cerrado).
+- Rotación del JWKS y discovery OIDC (parte de H5/H13).
+- `access.denied` por AMQP: las denegaciones quedan solo en logs y no en audit-service.
+
+Las tres son aceptables para el alcance. La de ACL de Redis se agrava por R3-9.
+
+### Hallazgos
+
+| ID | Severidad | Archivo:sección | Hallazgo | Recomendación |
+|---|---|---|---|---|
+| R3-1 | Media | `07-resiliencia.md › Compensación del alta`; `ADR-002 › Saga` pasos 5–7 | La compensación borra primero el usuario `PENDING` y después llama a `DELETE /internal/credentials`. El caso típico de compensación es un timeout del `PUT` porque auth está lento, y es justo cuando el `DELETE` también puede agotar reintentos. Entonces quedan credenciales `PENDING` huérfanas en auth: user-service ya no tiene fila que reconciliar y auth "nunca borra automáticamente". Si el usuario se vuelve a registrar con el mismo email, recibe un `409` en cada intento: **el email queda bloqueado de forma permanente** sin camino de recuperación. | Invertir el orden: llamar primero a `DELETE`, y solo cuando se confirme, borrar el `PENDING`. Si el `DELETE` falla, marcar el usuario `FAILED`/`PENDING` para que el barrido con gracia de user-service reintente. Otra opción: que auth acepte un `PUT` con el mismo email si la credencial existente está `PENDING` y es más antigua que la gracia. |
+| R3-2 | Media | `07 › Timeouts por arista` (agent→LLM 30 s; web→servicio 30 s de lectura); `ADR-008` punto 5 | El timeout de lectura de nginx (30 s) es igual o menor que el presupuesto del agente: 30 s del LLM, más hasta ~9,6 s de la herramienta agent→user, más los reintentos del SDK ante 429/5xx (que multiplican los 30 s). nginx devuelve 504 antes de que el agente aplique su degradación, y la llamada al LLM sigue consumiendo tokens sin que nadie reciba la respuesta. | Definir un *deadline* total del agente (p. ej. 25 s) que acote el timeout del LLM y los reintentos del SDK (fijar `max_retries` y `timeout` explícitos), y subir `proxy_read_timeout` solo en `/api/agent` (p. ej. 60 s). Documentar los presupuestos como jerarquía: nginx > agente > LLM. |
+| R3-3 | Media | `04 › Bloque de diseño` (`x-service-defaults: env_file: [.env]`); `ADR-002 › Postgres` y `› Consecuencias Positivas` | Todos los servicios reciben el `.env` completo: las contraseñas de todas las bases, todos los `client_secret`, la contraseña de administración de Postgres y `ANTHROPIC_API_KEY`. Eso **anula el control que ADR-002 declara** ("un servicio comprometido no puede leer la base de otro con sus credenciales"). | Eliminar `env_file` del ancla común e inyectar en cada servicio solo sus variables (ya están listadas en `environment:`). Como alternativa, usar `.env.<svc>` por servicio. |
+| R3-4 | Media | `ADR-003 › Revocación` ("la escribe auth-service (logout, deshabilitación de usuario)"); `06 › Revocación`; `ADR-003 › Alternativa 3` | Al deshabilitar o borrar un usuario, auth no conoce los `jti` de los access tokens vigentes porque no los registra, así que no puede escribirlos en el denylist. La afirmación de que la deshabilitación es efectiva de inmediato, que es justo el argumento con el que se descarta la Alternativa 3, no se puede cumplir con el diseño actual. | Añadir una revocación por sujeto, `auth:deny:sub:{userId} = disabledAt`, con TTL igual a la vida máxima del token: `jwt-guard` rechaza los tokens con `iat < disabledAt`. Es la misma lectura cruzada ya permitida y no hace falta registrar los `jti`. |
+| R3-5 | Media | `ADR-003 › Origen del rol`; `design.md › auth_db` (`user_roles_projection.last_version`); `03 › auth.user-projection` | `role.updated` es un evento del agregado `Role`, con su propio `aggregateVersion`, pero se compara con el `last_version` por usuario de `user_roles_projection`, que pertenece al agregado `User`. Son secuencias distintas: el resultado es descartar renombrados válidos o aplicar algunos viejos. | Guardar `role_last_version` por `role_id` (tabla `role_names_projection(role_id, role_name, last_version)`) y resolver el nombre por join. `last_version` por usuario queda solo para eventos `user.*`. |
+| R3-6 | Media | `ADR-008 › Decision` 2–3 y `› Alternativa 1`; `traceability.md` EX1-R04 | El Ex1 nombra explícitamente "OpenAI/Azure OpenAI". El ADR elige Anthropic y no da una razón técnica (solo dice que el PDF lo permite en Ex5), y deja el adaptador OpenAI como Evolución. La fila EX1-R04 cita "OpenAI/Azure OpenAI" sin marcar la desviación (solo EX5-R01 la marca). Un evaluador del Ex1 puede leerlo como incumplimiento. | Dar en ADR-008 razones reales y verificables (p. ej. disponibilidad de clave del equipo, calidad del tool use, que embeddings locales hacen innecesaria la API de embeddings) y marcar la desviación en EX1-R04. Mejor aún: implementar el adaptador OpenAI, que cuesta poco detrás del puerto. |
+| R3-7 | Baja | `03 › Garantías` ("role-service publica `role.*` directo") frente a `ADR-004 › Garantía de publicación` | ADR-004 solo declara como riesgo aceptado la publicación directa de auth. role-service también publica sin outbox, y `role.updated` alimenta la proyección del claim y la ingesta del agente; el riesgo no está registrado en el ADR. | Añadir role-service al riesgo aceptado de ADR-004, con respaldo `audit.fallback` igual que auth. |
+| R3-8 | Baja | `traceability.md › Ejercicio 1`, EX4-R10, EX2-R32 | (a) Falta una fila para la instrucción del Ex1 (autenticación, autorización, **auditoría de accesos**, gestión de roles, escalable). La DoD de la tarea 1.4 exigía referenciar `auth.#` y `access.denied` para "auditoría de accesos"; la palabra no aparece en la matriz y el validador no lo detectó. (b) EX4-R10 asigna el cambio `evaluate-agent-prompts-quality` pero su artefacto es `docs/diagnostico-ex4.md`, que es del cambio 9. (c) EX2-R32 ubica el código de resiliencia en `packages/contracts/` o `packages/jwt-guard/`, que no le corresponden según ADR-001. | Añadir EX1-R19 (instrucción) con `auth.#` y `event=access.denied`; corregir el cambio de EX4-R10; crear `packages/http-client` (transversal) o ubicarlo en `infrastructure/` de cada servicio. |
+| R3-9 | Baja | `04 › redis` (sin `requirepass`, `REDIS_URL` sin credenciales); `ADR-002 › Redis` | Sin ACL (Evolución) **y sin contraseña**, cualquier contenedor de la red `backend`, incluidos loki/promtail/grafana del perfil, puede borrar o escribir `auth:deny:jti:*` y anular revocaciones. | Usar al menos `requirepass` con la contraseña en `.env`; es trivial y no requiere ACL. |
+| R3-10 | Baja | `04 › Perfil observability` y `› networks` | Valores introducidos por los redactores. El binding de Grafana a `127.0.0.1:3000` bajo un perfil opcional es **correcto**. Pero: (a) Promtail está deprecado y fuera de soporte desde inicios de 2026 (Grafana recomienda Alloy; `needs-verification`); (b) Grafana está en la red `edge` sin necesitarlo; (c) `backend` con `internal: false` da salida a Internet a todas las bases de datos solo porque el agente la necesita. La separación `edge`/`backend` es correcta en intención pero débil en efecto. | Usar Grafana Alloy (o el driver de logs de Loki); dejar Grafana solo en `backend` más el puerto loopback; `backend` `internal: true` y una red `egress` exclusiva para `ai-agent-service`. |
+| R3-11 | Baja | `04 › mongo` y `› audit-service` (`MONGO_URL` con `audit_user`) | No hay init de Mongo que cree `audit_user` en `audit_db`, a diferencia del script detallado de Postgres. Con solo `MONGO_INITDB_ROOT_*`, audit-service no podrá autenticarse. Además, los healthchecks usan `wget`, que no viene en las imágenes `node:*-slim` (Debian-slim del agente). | Añadir `infra/mongo/init/01-audit-user.js` (rol `readWrite` sobre `audit_db`); usar un healthcheck en Node (`node -e "fetch(...)"`) o instalar `wget`/`curl`. |
+| R3-12 | Baja | `ADR-010 › Alternativa 1`; `ADR-009 › Alternativa 2`; `ADR-010 › Decision` 2 | Hay alternativas débiles o inexactas. "Zustand en lugar de RTK Query" mezcla categorías (gestor de estado frente a capa de datos remota). Chroma también ofrece filtros por metadatos y upsert por id, así que la razón de descarte no se sostiene. Jest se justifica por "coherencia con el runner" cuando la razón real y más fuerte es que **el PDF exige Jest**. | Reformular: "Zustand + TanStack Query" frente a RTK; Chroma descartado por madurez del servidor o recursos (o por preferencia declarada); citar el PDF en ADR-010. |
+| R3-13 | Baja | `ADR-004 › Context`; `ADR-004`/`ADR-005` (sin título H1); `08 › Rate limit` frente a `07 › Matriz` (agent→LLM); `08 › Pipeline` (`roleScope` "permite filtrar"); `01 › C4` (flecha punteada Redis→USER) | Errores e inconsistencias menores: (a) ADR-004 dice que "el Ejercicio 4 exige auditoría de accesos"; es el Ex1. (b) Ante un fallo del LLM, 08 degrada a `mock` **o** a fragmentos, mientras 07 solo a fragmentos; servir texto del mock a usuarios reales confunde. (c) El filtro por `roleScope` es opcional ("permite"), no obligatorio. (d) La lectura síncrona del denylist se dibuja con la convención de flecha asíncrona. | Corregir el contexto de ADR-004; fijar la degradación a "solo fragmentos, marcando que no hay generación"; hacer obligatorio el filtro `roleScope` con el rol del JWT; usar flecha continua. |
+| R3-14 | Baja | `07 › Timeouts por arista` (user→role 2 s ×3, user→auth 3 s ×4) | Los valores por arista son razonables para un entorno local, pero no hay presupuesto total: el alta puede tardar ~20 s en el peor caso antes de compensar. Además, reintentar 3 veces un `PUT` tras un *timeout* contra un auth lento amplifica la carga, justo el patrón de fallo en cascada del Ex4. | Definir un deadline del alta (p. ej. 8 s) que acote los reintentos; reintentar en *timeout* como máximo una vez y dejar que el breaker corte. La gracia de reconciliación debe ser mayor que ese deadline. |
+
+**Conteo por severidad (ronda 3):** Alta 0 · Media 6 (R3-1 a R3-6) · Baja 8 (R3-7 a R3-14).
+
+### Calidad de los ADRs como registros de decisión
+
+- **Fortalezas:**
+  - Contexto, decisión y consecuencias específicos del sistema, no genéricos.
+  - Consecuencias negativas honestas (p. ej. ADR-004 admite la pérdida de eventos de auth; ADR-003, la ventana de fail-open).
+  - 2–4 alternativas reales por ADR. Las mejores son ADR-003 (Alt. 3 y 4), ADR-005 (Alt. 3) y ADR-002 (Alt. 3), porque registran decisiones tomadas en esta auditoría.
+  - La sección `## Implementación` separa con claridad lo implementado de lo que queda como Evolución.
+- **Debilidades:**
+  - Ver R3-6 y R3-12.
+  - En el conjunto, la marca "Implementado en" promete mucho para los 120 min del Ex2: saga, outbox, colas de retardo, `aggregateVersion`, `client_credentials`, rotación de refresh por familia, denylist, argon2id y 4 breakers. Es creíble con el plan de 9 cambios, pero si algo se recorta durante la implementación, el ADR y la matriz deben actualizarse al archivar cada cambio. Si no, el ADR afirmará algo falso.
+
+### Valores introducidos por los redactores
+
+| Valor | Juicio |
+|---|---|
+| user→role 2 s, user→auth 3 s, agent→user 3 s | Razonables para red local; falta un deadline total (R3-14). |
+| agent→LLM 30 s | Razonable para generación no streaming con `max_tokens` acotado; incompatible con los 30 s de nginx (R3-2). |
+| Breaker: 5 fallos o 50 %, semiabierto a 30 s | Estándar y correcto. |
+| Grafana `127.0.0.1:3000` bajo el perfil `observability` | Correcto: no expone el puerto a la LAN y es opcional. |
+| Redes `edge`/`backend` | Bien intencionadas, pero `backend` con `internal: false` neutraliza el beneficio (R3-10). |
+| Reintentos de cola 5 s / 30 s / 2 min, N=3 | Correctos; ya estaban en el contrato. |
+
+### Perspectiva de un evaluador del Ejercicio 1
+
+Puntuaría alto en 7 de los 8 criterios:
+- Diagramas C4 y de secuencia coherentes.
+- Justificación por tecnología con alternativas.
+- Flujo de datos detallado.
+- Compose que separa lo normativo de lo ilustrativo.
+- DDD con agregados e invariantes reales.
+- Mapa OWASP, incluido el de LLM.
+- Matriz de fallos completa.
+
+"Dockerización completa y funcional" no se puede puntuar solo con documentos (está asignado correctamente al cambio 5).
+
+Lo que falta o resta puntos:
+1. Un **resumen ejecutivo de una página** al inicio de `README.md`, con 5–7 decisiones clave y un diagrama. Son unas 2 100 líneas para un ejercicio de 90 min; el evaluador necesita una entrada rápida.
+2. Un flujo de **gestión de roles y autorización** (CRUD de rol → `role.permissions.changed` → proyección/agente/auditoría, y dónde se aplica el RBAC). La instrucción del Ex1 lo nombra y solo aparece de forma indirecta.
+3. La desviación OpenAI → Anthropic sin justificar en el Ex1 (R3-6).
+4. Los errores fácticos de R3-13, que restan credibilidad en una lectura atenta.
+
+## Dictamen ronda 3
+
+**APROBADO CON OBSERVACIONES.**
+
+Los entregables registran fielmente el contrato auditado; ningún hallazgo H1–H20 ni N1–N3 se reintroduce. Las degradaciones a Evolución (ACL de Redis, rotación del JWKS, discovery, `access.denied` por AMQP) están declaradas con honestidad. El paquete es de calidad alta para el Ejercicio 1, y el PASS 16/18 del validador es coherente con este juicio.
+
+No hay hallazgos Alta. Antes de iniciar `bootstrap-monorepo-platform` y `build-*` conviene corregir las 6 Media:
+- En los documentos: R3-1 (orden de la compensación), R3-2 (presupuesto de timeouts del agente frente a nginx), R3-4 (revocación por sujeto) y R3-5 (versión de la proyección de rol), en `07`, `ADR-002`, `ADR-003` y `design.md`.
+- R3-3 (`env_file` compartido) es un cambio de una línea en `04`.
+- R3-6 requiere justificar Anthropic o implementar el adaptador OpenAI.
+
+Las Baja pueden resolverse en los cambios de implementación correspondientes, sobre todo `harden-compose-resilience-security` (R3-9, R3-10, R3-11, R3-14).
+
+## Verificación de cierre (ronda 4)
+
+- **Fecha:** 2026-10-20 · **Auditor:** el mismo (modelo Opus, externo).
+- **Fuentes revisadas** (versiones actualizadas):
+  - ADRs: `docs/adrs/ADR-002`, `003`, `004`, `005`, `008`, `009` y `010`.
+  - Arquitectura: `docs/architecture/01`, `03`, `04`, `06`, `07` y `08`.
+  - `docs/traceability.md`.
+  - `openspec/changes/design-architecture-docs/design.md` y `handoff.md`.
+
+| Hallazgo | Estado | Evidencia (archivo:sección) | Comentario |
+|---|---|---|---|
+| R3-1 Orden de la compensación | Cerrado | `ADR-002 › Saga` paso 5; `07 › Compensación del alta` y `› Matriz` (user→auth); `03 › Flujo: alta` | Ahora se llama primero a `DELETE` y solo tras confirmarse se borra el `PENDING`. Si el `DELETE` falla, el usuario sigue `PENDING` y la reconciliación reintenta. El email ya no queda bloqueado. Ver la inconsistencia residual en `design.md` (R4-3). |
+| R3-2 Presupuesto del agente frente a nginx | Cerrado | `07 › Presupuestos de tiempo`; `ADR-008` punto 5; `ADR-005` punto 1; `08 › Rate limit` | La jerarquía nginx 40 s > agente 30 s > LLM 20 s es correcta; incluye como máximo 1 reintento, `retry-after` solo si cabe en el presupuesto, y `max_retries`/`timeout` explícitos. Ver la matización de R4-5 sobre `AbortController`. |
+| R3-3 `env_file` compartido | Cerrado | `04 › x-service-defaults` (sin `env_file`) y tabla `infra/env/<servicio>.env` | Cada servicio recibe solo sus credenciales, y el control declarado en ADR-002 vuelve a ser cierto. |
+| R3-4 Revocación al deshabilitar | Cerrado | `ADR-003 › Revocación` (`auth:deny:user:{userId}` con `iat` < marca); `06 › Autenticación` | Es la solución recomendada. Matiz: la marca se escribe cuando auth *consume* `user.updated(DISABLED)`, así que "de inmediato" significa "tras la latencia del evento" (R4-7). |
+| R3-5 Versión de la proyección de rol | Parcial | `ADR-003 › Origen del rol` (`user_last_version`, `role_last_version`); `design.md › auth_db`; `03 › Garantías` | La separación por agregado es correcta. La decisión de **reiniciar `role_last_version` a 0** al recibir `user.role.assigned` reabre una ventana de desorden (R4-2). |
+| R3-6 Justificación de Anthropic | Parcial | `ADR-008 › Decision` 2 y `› Alternativa 1`; `traceability.md` EX1-R04 | La desviación está declarada en EX1-R04, que era lo importante para el evaluador. Pero las "razones técnicas" no diferencian: OpenAI también ofrece *function calling* nativo, *prompt caching* y SDK con reintentos. La Alternativa 1 afirma que descartar Anthropic "renuncia" a esas ventajas, y eso es inexacto. Residual: Baja. |
+| R3-7 role-service sin outbox | Cerrado | `ADR-004 › Garantía de publicación` (role-service con riesgo aceptado, `audit.fallback` y resincronización al arrancar) | La resincronización introduce R4-4. |
+| R3-8 Huecos de la matriz | Cerrado | `traceability.md` EX1-R19 (instrucción del Ex1, con `auth.#` y `access.denied`), EX4-R10 (cambio corregido), EX2-R32 (`apps/*/src/infrastructure/http/`) | — |
+| R3-9 Redis sin contraseña | Cerrado | `04 › redis` (`--requirepass`, healthcheck con `REDISCLI_AUTH`); tabla de `.env` | Riesgo menor: `requirepass` en los argumentos del comando es visible con `docker inspect`; es aceptable en local. |
+| R3-10 Redes y observabilidad | Parcial | `04 › networks`, `› Principios`, `› alloy`, `› grafana` | Alloy sustituye a Promtail; Grafana sale de `edge` y publica en loopback vía `grafana-ui`; `backend` pasa a `internal: true` y se añade `egress` para el agente. **Pero `edge` sigue sin ser `internal`**, así que los 5 servicios conservan salida a Internet (R4-1). |
+| R3-11 Init de Mongo y healthchecks | Cerrado | `04 › Init de Mongo` (`audit_user`, `readWrite` sobre `audit_db`, `authSource`); healthchecks con `node -e fetch(...)` | — |
+| R3-12 Alternativas débiles | Cerrado | `ADR-010 › Alternativa 1` (Zustand + TanStack Query, "coherencia, no capacidad"); `ADR-009 › Alternativa 2` (Chroma viable, preferencia declarada); `ADR-010 › Decision` 2 (cita el PDF) | Las alternativas ahora son honestas. |
+| R3-13 Errores menores | Cerrado | `ADR-004 › Context` (Ex1); títulos H1 en ADR-004 y ADR-005; `08 › Proveedor mock` (el mock no se usa como degradación); `08 › Pipeline` (`roleScope` **obligatorio**); `01 › C4` (flecha continua de lectura del denylist) | — |
+| R3-14 Presupuesto del alta | Cerrado | `07 › Presupuestos de tiempo` (alta ≤10 s; los reintentos cuentan contra el presupuesto); gracia de reconciliación mayor que el presupuesto | La tabla sigue mostrando 3 reintentos user→auth, pero el presupuesto los trunca. Es aceptable. |
+
+**Conteo por estado:** Cerrado 11 · Parcial 3 (R3-5, R3-6, R3-10) · Abierto 0 · Aceptado como riesgo 0.
+
+### Juicio sobre las decisiones propias de los redactores
+
+- **`role_last_version` reiniciado a 0 en `user.role.assigned`:** no es correcto del todo. Ver R4-2.
+- **`backend` `internal: true` + `egress` + `grafana-ui`:** el diseño es bueno y la justificación de `grafana-ui` (una red interna no puede publicar puertos) es técnicamente exacta. Sin embargo, esa misma regla aplicada a `edge` revela el hueco de R4-1.
+- **Código de resiliencia en `apps/*/src/infrastructure/http/`:** es correcto y coherente con ADR-001 (sin dominio en paquetes compartidos) y con ADR-006 (adaptadores en `infrastructure`). Solo user-service y ai-agent-service hacen llamadas salientes con breaker, así que el comodín `apps/*` sobrepromete. Basta con `apps/{user-service,ai-agent-service}/src/infrastructure/http/`. La duplicación entre dos servicios es menor y aceptable frente a crear un paquete nuevo.
+
+## Nuevos hallazgos (ronda 4)
+
+| ID | Severidad | Archivo:sección | Hallazgo | Recomendación |
+|---|---|---|---|---|
+| R4-1 | Media | `04 › networks` (`edge: {}`) y `› Principios` ("`egress`… a la que solo se une `ai-agent-service`") | `edge` no es `internal`, y auth, user, role, audit y agent están conectados a ella. En Docker, un contenedor unido a cualquier red no interna tiene salida a Internet, así que los 5 servicios la conservan. La afirmación de que solo el agente tiene salida es falsa, y un servicio comprometido puede exfiltrar datos. `edge` no puede pasar a `internal: true` sin más, porque `web` publica `8080` en ella; es la misma restricción que motivó `grafana-ui`. | Crear una red `public` solo para `web`, para publicar `8080`, y dejar `edge` con `internal: true`, compartida entre `web` y los servicios. Así solo `ai-agent-service` (vía `egress`) y `web` (vía `public`) tienen salida. Añadir a `harden-compose-resilience-security` una verificación: `docker compose exec user-service node -e "fetch('https://example.com')"` debe fallar. |
+| R4-2 | Baja | `ADR-003 › Origen del rol` ("se reinicia a 0 y el siguiente `role.updated` la converge") | Tras reasignar al rol R2, `role_last_version = 0` hace que se acepte **cualquier** `role.updated` de R2, incluido uno viejo retrasado en la cola de reintento. Ese evento sobrescribiría el `role_name` vigente traído por `user.role.assigned` con un nombre obsoleto, hasta que llegue otro `role.updated` (los renombrados son raros, así que puede durar mucho). Además, el nombre obsoleto viaja en el claim usado por el RBAC. | Sembrar `role_last_version` con la versión del rol que user-service obtiene al validarlo (`GET /roles/{id}` devuelve `version`; viaja en el payload de `user.role.assigned`), o usar una tabla por rol `role_names_projection(role_id, role_name, last_version)` resuelta por join. Complementario: que el claim use un `code` de rol inmutable en lugar del nombre editable. |
+| R4-3 | Baja | `design.md › Alta de usuario` paso 6 (reconciliación: "los elimina y llama `DELETE`") frente a `07 › Reconciliación` y `ADR-002` paso 5 | El contrato describe la reconciliación con el orden antiguo (borrar y luego `DELETE`), contrario al orden corregido en 07 y en ADR-002. Como `design.md` es la fuente de verdad de los cambios siguientes, un implementador podría seguirlo. | Alinear `design.md` con este texto: "llama `DELETE` y, solo cuando se confirma, elimina el `PENDING`". |
+| R4-4 | Baja | `ADR-004 › Garantía de publicación` (role-service "republica el estado vigente" al arrancar) | Si la resincronización emite eventos `role.updated` con `eventId` nuevos, `audit.events` (binding `role.#`) registrará cambios de rol falsos en cada reinicio de role-service, contaminando la auditoría. El agente, además, reingesta el catálogo. | Usar un tipo distinto (`role.snapshot`) sin binding hacia `audit.events`, o un `eventId` determinista (hash de `roleId` + `aggregateVersion`) para que audit lo deduplique. |
+| R4-5 | Baja | `ADR-008` punto 5, `07 › Presupuestos`, `08 › Agotamiento` ("sin consumo de tokens huérfano") | Cancelar con `AbortController` una petición **no streaming** cierra la conexión del cliente, pero no garantiza que el proveedor deje de generar y facturar. La afirmación es demasiado fuerte. | Usar streaming (cerrar el stream sí detiene la generación) o rebajar la afirmación a "se deja de esperar; el consumo ya iniciado puede facturarse". En ambos casos, `max_tokens` acota el coste. |
+| R4-6 | Baja | `04 › alloy` (`/var/run/docker.sock:ro`) | Montar el socket de Docker, aunque sea `:ro`, da acceso completo a la API de Docker, equivalente a root en el host. Está limitado al perfil opcional, pero no se declara como riesgo. | Leer los ficheros de `/var/lib/docker/containers` o usar el driver de logs de Loki; si se mantiene el socket, declararlo en `› Evolución` o en los riesgos de 06. |
+| R4-7 | Baja | `ADR-003 › Revocación` ("la deshabilitación es efectiva de inmediato") | `auth:deny:user` se escribe al consumir `user.updated(DISABLED)` del outbox. Con el broker caído, o el evento en reintento o DLQ, la deshabilitación se demora lo mismo; con Redis caído, el fail-open la anula. | Reformular como "efectiva tras la propagación del evento (normalmente segundos)". Opcional: que user-service invoque `POST /internal/revoke/{userId}` de forma síncrona además del evento. |
+
+**Conteo de nuevos hallazgos:** Alta 0 · Media 1 (R4-1) · Baja 6 (R4-2 a R4-7).
+
+## Dictamen ronda 4
+
+**APROBADO CON OBSERVACIONES.**
+
+Las 14 observaciones de la ronda 3 están atendidas: 11 cerradas, 3 parciales y ninguna abierta. Las 6 de severidad Media de la ronda 3 quedan cerradas (R3-1 a R3-4) o reducidas a residual Baja (R3-5, R3-6). No hay regresiones de H1–H20 ni de N1–N3.
+
+Queda **un único hallazgo Media nuevo (R4-1)**: la red `edge` sigue dando salida a Internet a los 5 servicios, en contra de lo que declara el diseño. Se corrige con una red `public` solo para `web` y `edge` como `internal: true`. Puede resolverse en `harden-compose-resilience-security`, con una verificación ejecutable, sin bloquear el archivado de este cambio documental.
+
+R4-3 (orden de la reconciliación en `design.md`) es de una línea y conviene corregirlo antes de archivar, porque `design.md` es el contrato de los cambios siguientes. El resto de las Baja (R4-2, R4-4 a R4-7) pueden asignarse a los cambios de implementación correspondientes.
+
+Desde la perspectiva de un evaluador del Ejercicio 1, el paquete está listo.
+
+## Verificación de cierre (ronda 5)
+
+- **Fecha:** 2026-10-20 · **Auditor:** el mismo (modelo Opus, externo).
+- **Alcance:** comprobación breve del cierre de R4-1 a R4-7 y de los parciales R3-5, R3-6 y R3-10.
+
+| Hallazgo | Estado | Evidencia (archivo:sección) | Comentario |
+|---|---|---|---|
+| R4-1 Salida a Internet por `edge` | Cerrado | `04 › networks` (`public` solo para `web`; `edge` y `backend` con `internal: true`; `egress` solo para el agente) y `› Principios` | Correcto: solo `web` (vía `public`) y `ai-agent-service` (vía `egress`) tienen salida. Hay una verificación ejecutable asignada a `harden-compose-resilience-security`. |
+| R4-2 Reinicio de `role_last_version` | Cerrado | `ADR-003 › Origen del rol` (`user_roles_projection` + `role_names_projection(role_id, role_name, last_version)`, nombre resuelto por join, sin reinicios) | Es la solución recomendada; no quedan referencias al reinicio a 0. El `code` inmutable queda como Evolución. |
+| R4-3 Orden de la reconciliación en el contrato | Cerrado | `design.md › Alta de usuario` paso 6 | Ahora se llama a `DELETE` y solo tras confirmarse se borra el `PENDING`, igual que en 07 y ADR-002. |
+| R4-4 Resincronización de role-service | Cerrado | `ADR-004 › Garantía de publicación` (`actor=system`, `reason=resync`) | Es aceptable. La responsabilidad recae en audit-service, que debe aplicar el filtro; queda como criterio de prueba en `build-user-audit-services`. Un tipo `role.snapshot` habría sido más robusto, pero no es necesario. |
+| R4-5 Afirmación sobre `AbortController` | Cerrado | `ADR-008` punto 5; `07 › Presupuestos`; `08 › Agotamiento` | La afirmación es ahora exacta: el consumo puede facturarse, `max_tokens` lo acota y el streaming queda como Evolución. |
+| R4-6 Socket de Docker en Alloy | Cerrado | `04 › alloy` y `› Evolución` | El riesgo está declarado, con una alternativa y la restricción de usar el perfil solo en desarrollo. |
+| R4-7 "Efectiva de inmediato" | Cerrado | `ADR-003 › Revocación`; `06 › Autenticación` | Ahora dice "tras la propagación del evento" y menciona el broker caído y el fail-open de Redis. |
+| R3-5 Versión de la proyección de rol | Cerrado | Ver R4-2 | — |
+| R3-6 Justificación de Anthropic | Cerrado | `ADR-008 › Decision` 2 (reconoce que las capacidades no son diferenciadoras; elige por disponibilidad de clave y preferencia del equipo); EX1-R04 declara la desviación | Ahora es honesto y verificable. |
+| R3-10 Redes y observabilidad | Cerrado | Ver R4-1 y R4-6 | — |
+
+**Conteo por estado:** Cerrado 10 · Parcial 0 · Abierto 0.
+
+Matiz menor, sin acción requerida: `ADR-003 › Alternativa 3` todavía dice que, sin denylist, la deshabilitación "no tendría efecto inmediato". Es correcto en términos relativos: segundos frente a la vida completa del token.
+
+## Dictamen final
+
+**APROBADO.** El cambio `design-architecture-docs` puede archivarse.
+
+A lo largo de cinco rondas se resolvieron todos los hallazgos:
+- **H1–H20:** 17 cerrados; H7 (outbox solo en user-service) y H16 (inconsistencias de proceso) aceptados como riesgo; H6 cerrado en rondas posteriores.
+- **N1–N3:** cerrados.
+- **R3-1 a R3-14:** cerrados.
+- **R4-1 a R4-7:** cerrados.
+
+No queda ningún hallazgo abierto de severidad Alta, Media o Baja. Los recortes de alcance están declarados como Evolución con riesgo aceptado en la sección `## Implementación` de cada ADR y en `docs/traceability.md`:
+- Outbox de auth y de role.
+- `access.denied` por AMQP.
+- Rotación del JWKS y discovery OIDC.
+- ACL de Redis.
+- Adaptador OpenAI/Azure.
+- Streaming del LLM.
+
+Seguimientos para los cambios de implementación (no bloquean el archivado):
+1. `harden-compose-resilience-security`: ejecutar la verificación de egress de R4-1.
+2. `build-user-audit-services`: implementar y probar el filtro `reason=resync` en audit-service (R4-4).
+3. Cada cambio debe actualizar la marca "Implementado en / Evolución" de los ADRs y el estado de la matriz al archivar, para que la documentación siga siendo veraz.
