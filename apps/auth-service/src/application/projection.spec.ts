@@ -79,6 +79,21 @@ describe('projection consumer', () => {
     expect(creds.items.get(U)?.status).toBe('ACTIVE');
   });
 
+  it('user.updated with an email change moves the login to the new (normalized) address', async () => {
+    await creds.setStatus(U, 'ACTIVE');
+    await proj.saveUserRole(U, R, 1);
+    await handler.handle(env('user.updated', 2, { userId: U, changes: { email: ' New@B.com ' }, status: 'ACTIVE' }));
+    expect(creds.items.get(U)?.email).toBe('new@b.com');
+    expect(await creds.findByEmail('a@b.com')).toBeNull();
+
+    // Another credential already owns the address: permanent failure (goes to DLQ), nothing changes.
+    await creds.save({ userId: 'other', email: 'taken@b.com', passwordHash: 'h', status: 'ACTIVE' });
+    await expect(
+      handler.handle(env('user.updated', 3, { userId: U, changes: { email: 'taken@b.com' }, status: 'ACTIVE' })),
+    ).rejects.toThrow('email already bound');
+    expect(creds.items.get(U)?.email).toBe('new@b.com');
+  });
+
   it('user.deleted revokes and removes; role events keep role names fresh by version', async () => {
     await handler.handle(env('user.role.assigned', 1, { userId: U, roleId: R, roleName: 'admin', roleVersion: 1 }));
     expect(proj.roles.get(R)).toEqual({ name: 'admin', lastVersion: 1, permissions: [] });

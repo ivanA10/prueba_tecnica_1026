@@ -29,6 +29,10 @@ export class PrismaCredentialRepository implements CredentialRepository {
     await this.db.credential.updateMany({ where: { userId }, data: { status } });
   }
 
+  async setEmail(userId: string, email: string): Promise<void> {
+    await this.db.credential.updateMany({ where: { userId }, data: { email } });
+  }
+
   async delete(userId: string): Promise<void> {
     await this.db.credential.deleteMany({ where: { userId } });
   }

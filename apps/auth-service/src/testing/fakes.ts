@@ -28,6 +28,10 @@ export class FakeCredentials implements CredentialRepository {
     const cur = this.items.get(id);
     if (cur) cur.status = status;
   }
+  async setEmail(id: string, email: string) {
+    const cur = this.items.get(id);
+    if (cur) cur.email = email;
+  }
   async delete(id: string) {
     this.items.delete(id);
   }
@@ -133,6 +137,7 @@ export const testConfig = (over: Partial<AuthConfig> = {}): AuthConfig => ({
   serviceTokenTtl: 300,
   cookieSecure: false,
   serviceClients: [{ id: 'user-service', secret: 's3cret' }],
+  serviceAudiences: ['auth-service', 'role-service'],
   retryDelaysMs: [10, 20, 30],
   maxRetries: 3,
   publishRetries: 2,

@@ -6,6 +6,7 @@ export interface CredentialRepository {
   findByUserId(userId: string): Promise<CredentialRecord | null>;
   save(record: CredentialRecord): Promise<void>;
   setStatus(userId: string, status: CredentialStatus): Promise<void>;
+  setEmail(userId: string, email: string): Promise<void>;
   delete(userId: string): Promise<void>;
 }
 
@@ -48,7 +49,7 @@ export interface SignedToken {
 }
 
 export interface TokenIssuer {
-  sign(input: { sub: string; roles: string[]; permissions?: string[]; audience: string; ttlSeconds: number }): Promise<SignedToken>;
+  sign(input: { sub: string; roles: string[]; permissions?: string[]; scope?: string; audience: string; ttlSeconds: number }): Promise<SignedToken>;
 }
 
 export interface EventPublisher {

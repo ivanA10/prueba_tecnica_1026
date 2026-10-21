@@ -6,7 +6,7 @@ import {
   Injectable,
   SetMetadata,
 } from '@nestjs/common';
-import type { AuthenticatedUser } from './options';
+import { AuthenticatedUser, isServiceToken } from './options';
 
 export const REQUIRED_PERMISSIONS = 'toka:required_permissions';
 export const ALLOW_SERVICE_TOKEN = 'toka:allow_service_token';
@@ -21,7 +21,7 @@ function hasPermission(granted: readonly string[] | undefined, required: string)
 
 export const RequirePermissions = (...perms: string[]) => SetMetadata(REQUIRED_PERMISSIONS, perms);
 
-/** Lets tokens whose roles include 'service' pass PermissionsGuard on this route. */
+/** Lets service tokens (scope `svc:internal`, issued only via client_credentials) pass PermissionsGuard on this route. */
 export const AllowServiceToken = () => SetMetadata(ALLOW_SERVICE_TOKEN, true);
 
 /**
@@ -42,9 +42,7 @@ export class PermissionsGuard implements CanActivate {
     if (!required) return true;
 
     const user = context.switchToHttp().getRequest<{ user?: AuthenticatedUser }>().user;
-    if (user?.roles?.includes('service')) {
-      if (this.meta<boolean>(ALLOW_SERVICE_TOKEN, context)) return true;
-    }
+    if (isServiceToken(user) && this.meta<boolean>(ALLOW_SERVICE_TOKEN, context)) return true;
 
     for (const perm of required) {
       if (!hasPermission(user?.permissions, perm)) {

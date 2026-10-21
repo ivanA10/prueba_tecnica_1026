@@ -129,6 +129,8 @@ describe('AmqpEventPublisher', () => {
   it('publishes persistent messages with confirm and resets on failure', async () => {
     const channel = {
       assertExchange: jest.fn().mockResolvedValue({}),
+      assertQueue: jest.fn().mockResolvedValue({}),
+      bindQueue: jest.fn().mockResolvedValue({}),
       publish: jest.fn((_e, _k, _c, _o, cb: (e: unknown) => void) => {
         cb(null);
         return true;
@@ -153,5 +155,33 @@ describe('AmqpEventPublisher', () => {
     connect.mockRejectedValueOnce(new Error('refused'));
     expect(await p.isReady()).toBe(false);
     await p.close();
+  });
+
+  it('declares the consumer queues on connect and rejects a mandatory message the broker returns', async () => {
+    const handlers: Record<string, (...a: unknown[]) => void> = {};
+    const channel = {
+      assertExchange: jest.fn().mockResolvedValue({}),
+      assertQueue: jest.fn().mockResolvedValue({}),
+      bindQueue: jest.fn().mockResolvedValue({}),
+      publish: jest.fn((_e, _k, _c, opts: { messageId: string }, cb: (e: unknown) => void) => {
+        handlers.return({ properties: { messageId: opts.messageId } }); // basic.return precedes basic.ack
+        cb(null);
+        return true;
+      }),
+      close: jest.fn(),
+      on: jest.fn((ev: string, cb: (...a: unknown[]) => void) => {
+        handlers[ev] = cb;
+      }),
+    };
+    const conn = { createConfirmChannel: jest.fn().mockResolvedValue(channel), close: jest.fn().mockResolvedValue(undefined), on: jest.fn() };
+    const p = new AmqpEventPublisher('amqp://x', jest.fn().mockResolvedValue(conn));
+    expect(await p.isReady()).toBe(true);
+    expect(channel.assertQueue.mock.calls.map((c) => c[0])).toEqual(['audit.events', 'auth.user-projection']);
+
+    const e = createEnvelope({ type: 'user.created', aggregateVersion: 1, correlationId: 'c', actor: 'system', payload: {} });
+    await expect(p.publish('user.created', e)).rejects.toThrow('unroutable');
+    expect(channel.publish.mock.calls[0][3]).toMatchObject({ mandatory: true });
+    expect(channel.assertQueue).toHaveBeenCalledTimes(4); // re-declared after the return
+    expect(conn.createConfirmChannel).toHaveBeenCalledTimes(1); // channel kept, not reset
   });
 });

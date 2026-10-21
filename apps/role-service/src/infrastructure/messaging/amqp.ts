@@ -1,5 +1,11 @@
 import * as amqp from 'amqplib';
-import { CORRELATION_ID_HEADER, DLX_EXCHANGE, EVENTS_EXCHANGE, EventEnvelope } from '@toka/contracts';
+import {
+  CORRELATION_ID_HEADER,
+  EVENTS_EXCHANGE,
+  EventEnvelope,
+  UnroutableMessageError,
+  declareEventTopology,
+} from '@toka/contracts';
 import type { EventPublisher } from '../../application/ports';
 
 type Conn = Awaited<ReturnType<typeof amqp.connect>>;
@@ -15,6 +21,9 @@ export class AmqpPublisher implements EventPublisher {
   private channel?: amqp.ConfirmChannel;
   private stopped = false;
   private timer?: NodeJS.Timeout;
+  /** messageIds returned as unroutable (`mandatory`); the return frame always precedes the confirm. */
+  private readonly returned = new Set<string>();
+  private readonly waiters: Array<() => void> = [];
 
   constructor(
     private readonly url: string,
@@ -23,6 +32,23 @@ export class AmqpPublisher implements EventPublisher {
 
   start(): void {
     void this.connect();
+  }
+
+  isReady(): boolean {
+    return this.channel !== undefined;
+  }
+
+  /** Resolves true once connected (topology declared), or false after `timeoutMs`. */
+  whenReady(timeoutMs: number): Promise<boolean> {
+    if (this.channel) return Promise.resolve(true);
+    return new Promise((resolve) => {
+      const t = setTimeout(() => resolve(false), timeoutMs);
+      t.unref();
+      this.waiters.push(() => {
+        clearTimeout(t);
+        resolve(true);
+      });
+    });
   }
 
   private async connect(): Promise<void> {
@@ -35,11 +61,15 @@ export class AmqpPublisher implements EventPublisher {
         this.scheduleReconnect();
       });
       const ch = await conn.createConfirmChannel();
-      await ch.assertExchange(EVENTS_EXCHANGE, 'topic', { durable: true });
-      await ch.assertExchange(DLX_EXCHANGE, 'direct', { durable: true });
+      ch.on('return', (msg: amqp.Message) => {
+        if (msg.properties.messageId) this.returned.add(msg.properties.messageId);
+      });
+      // Consumer queues may not exist yet on a fresh broker: declare them so nothing is dropped.
+      await declareEventTopology(ch);
       this.conn = conn;
       this.channel = ch;
       this.logger.info({ event: 'amqp.connected' }, 'AMQP connected');
+      this.waiters.splice(0).forEach((w) => w());
     } catch (err) {
       this.logger.warn({ event: 'amqp.unavailable', error: String(err) }, 'AMQP unavailable, retrying');
       this.scheduleReconnect();
@@ -64,11 +94,16 @@ export class AmqpPublisher implements EventPublisher {
         Buffer.from(JSON.stringify(envelope)),
         {
           persistent: true,
+          mandatory: true,
           contentType: 'application/json',
           messageId: envelope.eventId,
           headers: { [CORRELATION_ID_HEADER]: envelope.correlationId },
         },
-        (err) => (err ? reject(err) : resolve()),
+        (err) => {
+          if (err) return reject(err);
+          if (this.returned.delete(envelope.eventId)) return reject(new UnroutableMessageError(envelope.type));
+          resolve();
+        },
       );
     });
   }

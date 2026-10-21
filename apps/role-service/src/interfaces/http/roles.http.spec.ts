@@ -24,6 +24,8 @@ class HeaderGuard implements CanActivate {
 
 const as = (roles: string[], permissions: string[] = roles.includes('admin') ? ['*'] : []) =>
   JSON.stringify({ sub: 'u-1', roles, permissions, jti: 'j', exp: 9999999999 });
+/** client_credentials token as minted by auth-service (identity by scope, not by role name). */
+const svcToken = () => JSON.stringify({ sub: 'user-service', roles: [], permissions: [], scope: ['svc:internal'], jti: 'j', exp: 9999999999 });
 const ADMIN_ID = '00000000-0000-4000-8000-000000000001';
 
 describe('role-service', () => {
@@ -107,7 +109,7 @@ describe('role-service', () => {
   it('GET /roles/:id is cache-aside: miss fills the cache, hit does not touch the DB; list works', async () => {
     const created = await service.create({ name: 'editor', description: 'd', permissions: ['users:read'] }, 'system');
     repo.reads = 0;
-    const svc = as(['service']);
+    const svc = svcToken();
     const miss = await request(app.getHttpServer()).get(`/roles/${created.id}`).set('x-user', svc);
     expect(miss.status).toBe(200);
     expect(miss.body).toEqual({ id: created.id, name: 'editor', description: 'd', permissions: ['users:read'], version: 1 });
@@ -122,8 +124,13 @@ describe('role-service', () => {
   it('RBAC: without roles:write -> 403; roles:read lists; service can only read by id', async () => {
     const body = { name: 'x', permissions: [] };
     expect((await request(app.getHttpServer()).post('/roles').set('x-user', as(['user'])).send(body)).status).toBe(403);
-    expect((await request(app.getHttpServer()).get('/roles').set('x-user', as(['service']))).status).toBe(403);
-    expect((await request(app.getHttpServer()).put(`/roles/${ADMIN_ID}`).set('x-user', as(['service'])).send(body)).status).toBe(403);
+    expect((await request(app.getHttpServer()).get('/roles').set('x-user', svcToken())).status).toBe(403);
+    expect((await request(app.getHttpServer()).put(`/roles/${ADMIN_ID}`).set('x-user', svcToken()).send(body)).status).toBe(403);
+    // A user whose role is merely *named* "service" gets no service bypass on GET /roles/:id.
+    expect((await request(app.getHttpServer()).get(`/roles/${ADMIN_ID}`).set('x-user', as(['service']))).status).toBe(403);
+    // ...and that name is reserved: it cannot be created.
+    const reserved = await request(app.getHttpServer()).post('/roles').set('x-user', as(['admin'])).send({ name: ' Service ', permissions: [] });
+    expect(reserved.status).toBe(400);
     expect((await request(app.getHttpServer()).get('/health')).status).toBe(200);
     const reader = as(['operador'], ['roles:read']);
     expect((await request(app.getHttpServer()).post('/roles').set('x-user', reader).send(body)).status).toBe(403);

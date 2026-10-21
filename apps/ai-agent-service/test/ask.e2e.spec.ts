@@ -75,7 +75,9 @@ describe('POST /agent/ask (e2e, keyless)', () => {
     app = moduleRef.createNestApplication();
     app.useGlobalPipes(new ValidationPipe({ whitelist: true }));
     await app.init();
-  });
+    // Boots the full AppModule (key generation + knowledge seed): under `pnpm -r` parallel load the
+    // default 5 s hook timeout was intermittently exceeded.
+  }, 30000);
 
   afterAll(async () => {
     await app.close();

@@ -47,13 +47,23 @@ export class JoseTokenIssuer implements TokenIssuer {
     this.jwks = { keys: [{ kty: 'RSA', n: jwk.n as string, e: jwk.e as string, alg: 'RS256', use: 'sig', kid }] };
   }
 
-  async sign(input: { sub: string; roles: string[]; permissions?: string[]; audience: string; ttlSeconds: number }): Promise<SignedToken> {
+  async sign(input: { sub: string; roles: string[]; permissions?: string[]; scope?: string; audience: string; ttlSeconds: number }): Promise<SignedToken> {
     const iat = Math.floor(this.clock.now().getTime() / 1000);
     const exp = iat + input.ttlSeconds;
     const jti = randomUUID();
     const header = b64u(JSON.stringify({ alg: 'RS256', typ: 'JWT', kid: this.kid }));
     const claims = b64u(
-      JSON.stringify({ sub: input.sub, roles: input.roles, ...(input.permissions ? { permissions: input.permissions } : {}), jti, iss: this.issuer, aud: input.audience, iat, exp }),
+      JSON.stringify({
+        sub: input.sub,
+        roles: input.roles,
+        ...(input.permissions ? { permissions: input.permissions } : {}),
+        ...(input.scope ? { scope: input.scope } : {}),
+        jti,
+        iss: this.issuer,
+        aud: input.audience,
+        iat,
+        exp,
+      }),
     );
     const signature = createSign('RSA-SHA256').update(`${header}.${claims}`).sign(this.privateKey).toString('base64url');
     return { token: `${header}.${claims}.${signature}`, jti, iat, exp };

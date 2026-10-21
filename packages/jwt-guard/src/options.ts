@@ -27,12 +27,24 @@ export interface JwtGuardOptions {
   metrics?: GuardMetrics;
 }
 
+/**
+ * Scope that only auth-service puts in client_credentials tokens. Service identity is decided
+ * by this claim, never by a role name (role names are user-editable data).
+ */
+export const SERVICE_SCOPE = 'svc:internal';
+
 export interface AuthenticatedUser {
   sub: string;
   roles: string[];
   permissions: string[];
+  /** OAuth2 `scope` claim split on spaces (empty for user tokens). */
+  scope?: string[];
   jti: string;
   iat: number;
   exp: number;
   aud: string | string[];
+}
+
+export function isServiceToken(user: Pick<AuthenticatedUser, 'scope'> | undefined): boolean {
+  return Boolean(user?.scope?.includes(SERVICE_SCOPE));
 }

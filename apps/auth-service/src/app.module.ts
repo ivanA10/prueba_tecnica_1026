@@ -24,12 +24,17 @@ import {
   InternalCredentialsController,
   JwksController,
   OAuthController,
+  READINESS,
 } from './interfaces/http/controllers';
-import { RolesGuard } from './interfaces/http/roles.guard';
+import { ServiceTokenGuard } from './interfaces/http/service-token.guard';
 
 const PRISMA = 'PRISMA';
 const REDIS = 'REDIS';
 const BROKER = 'BROKER';
+
+/** Readiness probes must answer within the healthcheck timeout even if a dependency hangs. */
+const within = (p: Promise<boolean>, ms = 1500): Promise<boolean> =>
+  Promise.race([p, new Promise<boolean>((r) => setTimeout(() => r(false), ms).unref())]);
 
 @Injectable()
 class Lifecycle implements OnApplicationBootstrap, OnModuleDestroy {
@@ -98,6 +103,15 @@ class Lifecycle implements OnApplicationBootstrap, OnModuleDestroy {
         new ResilientEventPublisher(b, log as never, c.publishRetries),
     },
     {
+      provide: READINESS,
+      inject: [PRISMA, REDIS, BROKER],
+      useFactory: (prisma: PrismaClient, redis: Redis, broker: AmqpBroker) => async () => ({
+        postgres: await within(prisma.$queryRaw`SELECT 1`.then(() => true, () => false)),
+        redis: await within(redis.ping().then((r) => r === 'PONG', () => false)),
+        rabbitmq: broker.isReady(),
+      }),
+    },
+    {
       provide: JWT_GUARD_OPTIONS,
       inject: [TOKENS.Issuer, REDIS, TOKENS.Logger, TOKENS.Config],
       useFactory: (issuer: JoseTokenIssuer, redis: Redis, logger: never, c: AuthConfig) => ({
@@ -109,7 +123,7 @@ class Lifecycle implements OnApplicationBootstrap, OnModuleDestroy {
       }),
     },
     JwtAuthGuard,
-    RolesGuard,
+    ServiceTokenGuard,
     AuthService,
     ServiceTokenService,
     CredentialsService,

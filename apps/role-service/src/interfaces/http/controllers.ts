@@ -3,11 +3,14 @@ import {
   Controller,
   Get,
   HttpCode,
+  Inject,
+  Optional,
   Param,
   ParseUUIDPipe,
   Post,
   Put,
   Req,
+  ServiceUnavailableException,
   UseGuards,
 } from '@nestjs/common';
 import { PERMISSIONS } from '@toka/contracts';
@@ -68,15 +71,25 @@ export class RolesController {
   }
 }
 
+/** Dependency checks for /ready (Postgres, Redis, AMQP topology). */
+export const READINESS = 'READINESS';
+export type ReadinessCheck = () => Promise<Record<string, boolean>>;
+
 @Controller()
 export class HealthController {
+  constructor(@Optional() @Inject(READINESS) private readonly readiness?: ReadinessCheck) {}
+
   @Get('health')
   health() {
     return { status: 'ok' };
   }
 
   @Get('ready')
-  ready() {
-    return { status: 'ok' };
+  async ready() {
+    const checks = this.readiness ? await this.readiness() : {};
+    if (Object.values(checks).some((ok) => !ok)) {
+      throw new ServiceUnavailableException({ status: 'unavailable', checks });
+    }
+    return { status: 'ready', checks };
   }
 }

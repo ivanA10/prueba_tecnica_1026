@@ -87,7 +87,7 @@ describe('AuditConsumer', () => {
     const c = new AuditConsumer({} as never, config, jest.fn().mockResolvedValue(conn));
     await c.start();
     expect(c.isConnected()).toBe(true);
-    const bound = ch.bindQueue.mock.calls.filter((a) => a[1] === 'toka.events').map((a) => a[2]);
+    const bound = ch.bindQueue.mock.calls.filter((a) => a[0] === 'audit.events' && a[1] === 'toka.events').map((a) => a[2]);
     expect(bound).toEqual(['user.#', 'auth.#', 'role.#']);
     expect(ch.assertQueue).toHaveBeenCalledWith('audit.events.retry', expect.objectContaining({ arguments: expect.objectContaining({ 'x-message-ttl': 5000 }) }));
     await c.onModuleDestroy();

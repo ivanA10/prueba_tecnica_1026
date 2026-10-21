@@ -1,5 +1,11 @@
 import { Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
-import { CORRELATION_ID_HEADER, EVENTS_EXCHANGE, EventEnvelope } from '@toka/contracts';
+import {
+  CORRELATION_ID_HEADER,
+  EVENTS_EXCHANGE,
+  EventEnvelope,
+  UnroutableMessageError,
+  declareEventTopology,
+} from '@toka/contracts';
 import { PrismaClient } from './generated/prisma';
 import { UserConfig } from './config';
 import { USER_CONFIG } from './users.service';
@@ -75,6 +81,8 @@ export class OutboxPublisher implements OnModuleInit, OnModuleDestroy {
 
 interface AmqpChannelLike {
   assertExchange(name: string, type: string, opts: object): Promise<unknown>;
+  assertQueue(name: string, opts: object): Promise<unknown>;
+  bindQueue(queue: string, exchange: string, key: string): Promise<unknown>;
   publish(
     exchange: string,
     key: string,
@@ -92,10 +100,15 @@ interface AmqpConnectionLike {
 }
 export type AmqpConnect = (url: string) => Promise<AmqpConnectionLike>;
 
-/** Confirm-channel publisher with lazy (re)connection. */
+/**
+ * Confirm-channel publisher with lazy (re)connection. Declares the consumer queues itself and
+ * publishes with `mandatory`, so an event is never marked as published unless a queue holds it.
+ */
 export class AmqpEventPublisher implements EventPublisher {
   private conn?: AmqpConnectionLike;
   private channel?: AmqpChannelLike;
+  /** messageIds the broker returned as unroutable; the return frame always precedes the confirm. */
+  private readonly returned = new Set<string>();
 
   constructor(
     private readonly url: string,
@@ -124,7 +137,11 @@ export class AmqpEventPublisher implements EventPublisher {
     const ch = await conn.createConfirmChannel();
     ch.on('error', this.reset);
     ch.on('close', this.reset);
-    await ch.assertExchange(EVENTS_EXCHANGE, 'topic', { durable: true });
+    ch.on('return', (msg) => {
+      const id = (msg as { properties?: { messageId?: string } } | undefined)?.properties?.messageId;
+      if (id) this.returned.add(id);
+    });
+    await declareEventTopology(ch);
     this.conn = conn;
     this.channel = ch;
     return ch;
@@ -139,14 +156,24 @@ export class AmqpEventPublisher implements EventPublisher {
         Buffer.from(JSON.stringify(envelope)),
         {
           persistent: true,
+          mandatory: true,
           messageId: envelope.eventId,
           contentType: 'application/json',
           headers: { [CORRELATION_ID_HEADER]: envelope.correlationId },
         },
-        (err) => (err ? reject(err instanceof Error ? err : new Error(String(err))) : resolve()),
+        (err) => {
+          if (err) return reject(err instanceof Error ? err : new Error(String(err)));
+          if (this.returned.delete(envelope.eventId)) return reject(new UnroutableMessageError(routingKey));
+          resolve();
+        },
       );
-    }).catch((err) => {
-      this.reset();
+    }).catch(async (err) => {
+      if (err instanceof UnroutableMessageError) {
+        // Queues were deleted after connecting: re-declare so the next outbox poll can deliver.
+        await declareEventTopology(ch).catch(() => undefined);
+      } else {
+        this.reset();
+      }
       throw err;
     });
   }

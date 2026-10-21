@@ -65,6 +65,14 @@ export class ProjectionHandler {
     const userId = str(p.userId, 'userId');
     const ur = await this.projection.getUserRole(userId);
     if (ur && env.aggregateVersion <= ur.lastVersion) return;
+    const changes = (p.changes ?? {}) as Payload;
+    if (typeof changes.email === 'string' && changes.email) {
+      // Login is by email: the credential must follow the user's new address.
+      const email = changes.email.trim().toLowerCase();
+      const holder = await this.credentials.findByEmail(email);
+      if (holder && holder.userId !== userId) throw new PermanentError(`email already bound to another credential`);
+      await this.credentials.setEmail(userId, email);
+    }
     if (p.status === 'DISABLED') {
       await this.credentials.setStatus(userId, 'DISABLED');
       await this.auth.revokeUserSessions(userId);
