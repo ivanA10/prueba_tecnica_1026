@@ -1,6 +1,6 @@
 import { randomUUID } from 'crypto';
 import { ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { createEnvelope, deterministicEventId, EventActor, RoutingKeys } from '@toka/contracts';
+import { createEnvelope, deterministicEventId, EventActor, PERMISSIONS, RoutingKeys, WILDCARD } from '@toka/contracts';
 import { getCorrelationId } from '@toka/logger';
 import { DuplicateRoleError, Role, samePermissions, VersionConflictError } from '../domain/role';
 import { EventPublisher, RoleCache, RoleData, RoleRepository, TOKENS } from './ports';
@@ -81,8 +81,28 @@ export class RoleService {
 
   /** Idempotent seed of the admin role with a fixed id (consumed by user-service bootstrap). */
   async seedAdmin(adminRoleId: string): Promise<void> {
-    if (await this.roles.findById(adminRoleId)) return;
-    await this.create({ name: 'admin', description: 'Administrator', permissions: ['*'] }, 'system', adminRoleId);
+    await this.seedRole(adminRoleId, 'admin', 'Administrator', [WILDCARD]);
+  }
+
+  /** Idempotent seed of the example roles (operador, auditor). */
+  async seedExampleRoles(operadorRoleId: string, auditorRoleId: string): Promise<void> {
+    await this.seedRole(operadorRoleId, 'operador', 'Operador', [
+      PERMISSIONS.USERS_READ,
+      PERMISSIONS.ROLES_READ,
+      PERMISSIONS.AUDIT_READ,
+      PERMISSIONS.AGENT_ASK,
+    ]);
+    await this.seedRole(auditorRoleId, 'auditor', 'Auditor', [PERMISSIONS.AUDIT_READ]);
+  }
+
+  private async seedRole(id: string, name: string, description: string, permissions: string[]): Promise<void> {
+    if (await this.roles.findById(id)) return;
+    try {
+      await this.create({ name, description, permissions }, 'system', id);
+    } catch (err) {
+      if (err instanceof ConflictException) return; // name already taken (e.g. created manually)
+      throw err;
+    }
   }
 
   /** Re-publishes every role as role.updated (deterministic eventId) to recover lost publications. */

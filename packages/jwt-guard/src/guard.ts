@@ -77,7 +77,8 @@ export class JwtAuthGuard implements CanActivate {
     await this.checkDenylist(sub, jti, iat);
 
     const roles = Array.isArray(payload.roles) ? (payload.roles as string[]) : [];
-    req.user = { sub, roles, jti, iat, exp, aud };
+    const permissions = Array.isArray(payload.permissions) ? (payload.permissions as string[]) : [];
+    req.user = { sub, roles, permissions, jti, iat, exp, aud };
     return true;
   }
 

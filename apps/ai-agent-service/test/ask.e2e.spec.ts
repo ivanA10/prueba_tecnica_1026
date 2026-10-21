@@ -24,14 +24,14 @@ import {
 
 describe('POST /agent/ask (e2e, keyless)', () => {
   let app: INestApplication;
-  let sign: (roles: string[]) => Promise<string>;
+  let sign: (roles: string[], permissions: string[]) => Promise<string>;
   const lookup = jest.fn();
 
   beforeAll(async () => {
     const { publicKey, privateKey } = await generateKeyPair('RS256');
     const jwk = { ...(await exportJWK(publicKey)), kid: 'k1', alg: 'RS256' };
-    sign = (roles) =>
-      new SignJWT({ roles })
+    sign = (roles, permissions) =>
+      new SignJWT({ roles, permissions })
         .setProtectedHeader({ alg: 'RS256', kid: 'k1' })
         .setSubject('user-1')
         .setJti(`j-${Math.random()}`)
@@ -81,10 +81,17 @@ describe('POST /agent/ask (e2e, keyless)', () => {
     await app.close();
   });
 
-  it('401 without JWT; 200 with mock provider, sources and tokens; tool for admin only', async () => {
+  it('401 without JWT; 200 with mock provider, sources and tokens; 403 without agent:ask/agent:ingest; tool with users:read', async () => {
     await request(app.getHttpServer()).post('/agent/ask').send({ question: 'hola' }).expect(401);
 
-    const viewer = await sign(['viewer']);
+    const auditor = await sign(['auditor'], ['audit:read']);
+    await request(app.getHttpServer())
+      .post('/agent/ask')
+      .set('Authorization', `Bearer ${auditor}`)
+      .send({ question: 'Como cierro sesion?' })
+      .expect(403);
+
+    const viewer = await sign(['operador'], ['agent:ask']);
     const ok = await request(app.getHttpServer())
       .post('/agent/ask')
       .set('Authorization', `Bearer ${viewer}`)
@@ -103,7 +110,7 @@ describe('POST /agent/ask (e2e, keyless)', () => {
       .expect(403);
 
     lookup.mockResolvedValueOnce([{ id: '1', name: 'Ana', roleId: 'r', status: 'active' }]);
-    const admin = await sign(['admin']);
+    const admin = await sign(['operador'], ['agent:ask', 'users:read']);
     const withTool = await request(app.getHttpServer())
       .post('/agent/ask')
       .set('Authorization', `Bearer ${admin}`)

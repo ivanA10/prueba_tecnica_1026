@@ -7,11 +7,11 @@ import {
   ServiceUnavailableException,
   UseGuards,
 } from '@nestjs/common';
-import { JwtAuthGuard } from '@toka/jwt-guard';
+import { JwtAuthGuard, PermissionsGuard, RequirePermissions } from '@toka/jwt-guard';
+import { PERMISSIONS } from '@toka/contracts';
 import { AuditProcessor } from './audit.processor';
 import { AuditConsumer } from './audit.consumer';
 import { AuditQueryDto } from './dto/audit-query.dto';
-import { Roles, RolesGuard } from './roles.guard';
 
 export const MONGO_READY = 'MONGO_READY';
 
@@ -24,8 +24,8 @@ export class AuditController {
   ) {}
 
   @Get('audit/events')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('admin')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(PERMISSIONS.AUDIT_READ)
   async events(@Query() q: AuditQueryDto) {
     const from = q.from ? new Date(q.from) : undefined;
     const to = q.to ? new Date(q.to) : undefined;

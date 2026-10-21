@@ -49,6 +49,14 @@ describe('projection consumer', () => {
     await creds.save({ userId: U, email: 'a@b.com', passwordHash: 'h', status: 'PENDING' });
   });
 
+  it('role.created / role.updated project permissions, last version wins', async () => {
+    await handler.handle(env('role.created', 1, { roleId: R, name: 'op', permissions: ['users:read'] }));
+    expect(proj.roles.get(R)).toEqual({ name: 'op', lastVersion: 1, permissions: ['users:read'] });
+    await handler.handle(env('role.updated', 3, { roleId: R, name: 'op', permissions: ['*'] }));
+    await handler.handle(env('role.updated', 2, { roleId: R, name: 'old', permissions: [] }));
+    expect(proj.roles.get(R)).toEqual({ name: 'op', lastVersion: 3, permissions: ['*'] });
+  });
+
   it('user.created activates only PENDING credentials; duplicate event is a no-op', async () => {
     const e = env('user.created', 1, { userId: U, email: 'a@b.com', roleId: R, status: 'ACTIVE' });
     await handler.handle(e);
@@ -73,7 +81,7 @@ describe('projection consumer', () => {
 
   it('user.deleted revokes and removes; role events keep role names fresh by version', async () => {
     await handler.handle(env('user.role.assigned', 1, { userId: U, roleId: R, roleName: 'admin', roleVersion: 1 }));
-    expect(proj.roles.get(R)).toEqual({ name: 'admin', lastVersion: 1 });
+    expect(proj.roles.get(R)).toEqual({ name: 'admin', lastVersion: 1, permissions: [] });
     await handler.handle(env('role.updated', 2, { roleId: R, name: 'root' }));
     await handler.handle(env('role.updated', 1, { roleId: R, name: 'old' }));
     expect(proj.roles.get(R)?.name).toBe('root');

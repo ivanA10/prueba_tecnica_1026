@@ -99,7 +99,7 @@ describe('auth-service HTTP', () => {
     await app.init();
     await creds.save({ userId: USER_ID, email: 'a@b.com', passwordHash: 'h:pw123456', status: 'ACTIVE' });
     await projection.saveUserRole(USER_ID, ROLE_ID, 1);
-    await projection.saveRoleName(ROLE_ID, 'admin', 1);
+    await projection.saveRoleName(ROLE_ID, 'admin', 1, ['users:read', 'roles:write']);
   });
 
   afterEach(() => app.close());
@@ -112,7 +112,7 @@ describe('auth-service HTTP', () => {
     expect(cookie).toMatch(/refresh_token=.*HttpOnly.*SameSite=Strict/i);
     const { header, payload } = verifyRs256(res.body.accessToken, jwks());
     expect(header).toMatchObject({ alg: 'RS256', kid: 'test-kid' });
-    expect(payload).toMatchObject({ sub: USER_ID, roles: ['admin'], iss: 'toka-auth', aud: 'toka-api' });
+    expect(payload).toMatchObject({ sub: USER_ID, roles: ['admin'], permissions: ['users:read', 'roles:write'], iss: 'toka-auth', aud: 'toka-api' });
     expect(payload.jti).toBeDefined();
     expect(publisher.events.map((e) => e.type)).toEqual(['auth.login.succeeded']);
   });
@@ -174,6 +174,7 @@ describe('auth-service HTTP', () => {
     expect(ok.status).toBe(200);
     const { payload } = verifyRs256(ok.body.access_token, jwks());
     expect(payload).toMatchObject({ aud: 'role-service', roles: ['service'], sub: 'user-service' });
+    expect(payload.permissions).toBeUndefined();
 
     const bad = await request(app.getHttpServer())
       .post('/oauth/token')
@@ -188,7 +189,7 @@ describe('auth-service HTTP', () => {
   it('internal credentials: 403 without service role; PUT is idempotent (201 then 200); 409 on foreign email; DELETE revokes', async () => {
     const svc = JSON.stringify({ sub: 'user-service', roles: ['service'], jti: 'j', exp: 9999999999 });
     const newId = '33333333-3333-4333-8333-333333333333';
-    const body = { email: 'n@b.com', password: 'longpassword', roleId: ROLE_ID, roleName: 'admin', roleVersion: 1 };
+    const body = { email: 'n@b.com', password: 'longpassword', roleId: ROLE_ID, roleName: 'admin', roleVersion: 1, rolePermissions: ['*'] };
 
     const forbidden = await request(app.getHttpServer())
       .put(`/internal/credentials/${newId}`)
@@ -199,6 +200,7 @@ describe('auth-service HTTP', () => {
     const created = await request(app.getHttpServer()).put(`/internal/credentials/${newId}`).set('x-user', svc).send(body);
     expect(created.status).toBe(201);
     expect(creds.items.get(newId)?.status).toBe('PENDING');
+    expect(projection.roles.get(ROLE_ID)?.permissions).toEqual(['*']);
     const hashBefore = creds.items.get(newId)?.passwordHash;
     const again = await request(app.getHttpServer()).put(`/internal/credentials/${newId}`).set('x-user', svc).send(body);
     expect(again.status).toBe(200);

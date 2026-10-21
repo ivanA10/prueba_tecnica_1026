@@ -33,7 +33,7 @@ export async function evaluate(llm: LlmProvider = new MockProvider(), priceEnv =
     llm,
     users: fakeUsers,
     metrics: { record: () => undefined },
-    settings: { adminRole: 'admin', ragTopK: 4, ragMinScore: 0.12, llmMaxTokens: 512, llmTimeoutMs: 20000, agentDeadlineMs: 30000 },
+    settings: { ragTopK: 4, ragMinScore: 0.12, llmMaxTokens: 512, llmTimeoutMs: 20000, agentDeadlineMs: 30000 },
     priceEnv,
   });
   const known = ['roles-permisos', 'auditoria-eventos', 'guia-uso', 'seguridad-politicas'];

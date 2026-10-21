@@ -30,6 +30,7 @@ export interface JwtGuardOptions {
 export interface AuthenticatedUser {
   sub: string;
   roles: string[];
+  permissions: string[];
   jti: string;
   iat: number;
   exp: number;

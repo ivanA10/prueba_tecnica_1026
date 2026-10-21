@@ -13,8 +13,9 @@ export interface ProjectionRepository {
   getUserRole(userId: string): Promise<{ roleId: string; lastVersion: number } | null>;
   saveUserRole(userId: string, roleId: string, lastVersion: number): Promise<void>;
   setUserVersion(userId: string, lastVersion: number): Promise<void>;
-  getRoleName(roleId: string): Promise<{ name: string; lastVersion: number } | null>;
-  saveRoleName(roleId: string, name: string, lastVersion: number): Promise<void>;
+  getRoleName(roleId: string): Promise<{ name: string; lastVersion: number; permissions: string[] } | null>;
+  /** `permissions` undefined keeps the stored ones (empty on first insert). */
+  saveRoleName(roleId: string, name: string, lastVersion: number, permissions?: string[]): Promise<void>;
   deleteUser(userId: string): Promise<void>;
   isProcessed(eventId: string): Promise<boolean>;
   markProcessed(eventId: string): Promise<void>;
@@ -47,7 +48,7 @@ export interface SignedToken {
 }
 
 export interface TokenIssuer {
-  sign(input: { sub: string; roles: string[]; audience: string; ttlSeconds: number }): Promise<SignedToken>;
+  sign(input: { sub: string; roles: string[]; permissions?: string[]; audience: string; ttlSeconds: number }): Promise<SignedToken>;
 }
 
 export interface EventPublisher {

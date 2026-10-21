@@ -1,6 +1,6 @@
 import { Inject, Injectable, Module, OnApplicationBootstrap, OnModuleDestroy } from '@nestjs/common';
 import Redis from 'ioredis';
-import { JWT_GUARD_OPTIONS, JwtAuthGuard, RedisDenylistReader } from '@toka/jwt-guard';
+import { JWT_GUARD_OPTIONS, JwtAuthGuard, PermissionsGuard, RedisDenylistReader } from '@toka/jwt-guard';
 import { createLogger } from '@toka/logger';
 import { PrismaClient } from './generated/prisma';
 import { TOKENS } from './application/ports';
@@ -11,7 +11,6 @@ import { AmqpPublisher } from './infrastructure/messaging/amqp';
 import { PrismaRoleRepository } from './infrastructure/persistence/prisma-role-repository';
 import { RedisRoleCache } from './infrastructure/redis/redis-role-cache';
 import { HealthController, RolesController } from './interfaces/http/controllers';
-import { RolesGuard } from './interfaces/http/roles.guard';
 
 const PRISMA = 'PRISMA';
 const REDIS = 'REDIS';
@@ -33,6 +32,7 @@ class Lifecycle implements OnApplicationBootstrap, OnModuleDestroy {
   async onApplicationBootstrap(): Promise<void> {
     this.broker.start();
     await this.roles.seedAdmin(this.config.adminRoleId);
+    await this.roles.seedExampleRoles(this.config.operadorRoleId, this.config.auditorRoleId);
     // Non-blocking re-sync: a broker outage only produces warnings.
     void this.roles
       .resync()
@@ -94,7 +94,7 @@ class Lifecycle implements OnApplicationBootstrap, OnModuleDestroy {
       }),
     },
     JwtAuthGuard,
-    RolesGuard,
+    PermissionsGuard,
     RoleService,
     Lifecycle,
   ],

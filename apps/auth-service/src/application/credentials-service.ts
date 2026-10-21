@@ -14,6 +14,7 @@ export interface UpsertCredentialInput {
   roleId: string;
   roleName?: string;
   roleVersion?: number;
+  rolePermissions?: string[];
 }
 
 @Injectable()
@@ -52,7 +53,7 @@ export class CredentialsService {
       const rn = await this.projection.getRoleName(input.roleId);
       const version = input.roleVersion ?? 0;
       if (!rn || version >= rn.lastVersion) {
-        await this.projection.saveRoleName(input.roleId, input.roleName, version);
+        await this.projection.saveRoleName(input.roleId, input.roleName, version, input.rolePermissions);
       }
     }
     return { created: !existing };

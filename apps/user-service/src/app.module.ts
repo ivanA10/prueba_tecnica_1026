@@ -13,7 +13,6 @@ import { AmqpConnect, AmqpEventPublisher, EVENT_PUBLISHER, OutboxPublisher } fro
 import { PrismaClient } from './generated/prisma';
 import { AUTH_CLIENT, ROLE_CLIENT, USER_REPOSITORY } from './ports';
 import { PrismaService } from './prisma.service';
-import { RolesGuard } from './roles.guard';
 import { UsersController } from './users.controller';
 import { PrismaUserRepository } from './users.repository';
 import { CLOCK, USER_CONFIG, UsersService } from './users.service';
@@ -95,7 +94,6 @@ const config = loadConfig();
     },
     Reflector,
     JwtAuthGuard,
-    RolesGuard,
     UsersService,
     OutboxPublisher,
     ReconcileScheduler,

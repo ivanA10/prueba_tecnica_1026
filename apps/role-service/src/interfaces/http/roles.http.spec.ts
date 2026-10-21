@@ -9,7 +9,7 @@ import { RoleService } from '../../application/role-service';
 import { loadConfig } from '../../config/config';
 import { FakeCache, FakePublisher, FakeRoleRepo } from '../../testing/fakes';
 import { HealthController, RolesController } from './controllers';
-import { RolesGuard } from './roles.guard';
+import { PermissionsGuard } from '@toka/jwt-guard';
 
 @Injectable()
 class HeaderGuard implements CanActivate {
@@ -22,7 +22,8 @@ class HeaderGuard implements CanActivate {
   }
 }
 
-const as = (roles: string[]) => JSON.stringify({ sub: 'u-1', roles, jti: 'j', exp: 9999999999 });
+const as = (roles: string[], permissions: string[] = roles.includes('admin') ? ['*'] : []) =>
+  JSON.stringify({ sub: 'u-1', roles, permissions, jti: 'j', exp: 9999999999 });
 const ADMIN_ID = '00000000-0000-4000-8000-000000000001';
 
 describe('role-service', () => {
@@ -42,7 +43,7 @@ describe('role-service', () => {
         { provide: TOKENS.Roles, useValue: repo },
         { provide: TOKENS.Cache, useValue: cache },
         { provide: TOKENS.Publisher, useValue: pub },
-        RolesGuard,
+        PermissionsGuard,
         RoleService,
       ],
     })
@@ -61,9 +62,9 @@ describe('role-service', () => {
     const res = await request(app.getHttpServer())
       .post('/roles')
       .set('x-user', as(['admin']))
-      .send({ name: 'editor', permissions: ['docs:write'] });
+      .send({ name: 'editor', permissions: ['users:write'] });
     expect(res.status).toBe(201);
-    expect(res.body).toMatchObject({ name: 'editor', version: 1, permissions: ['docs:write'] });
+    expect(res.body).toMatchObject({ name: 'editor', version: 1, permissions: ['users:write'] });
     expect(pub.events.map((e) => [e.type, e.aggregateVersion])).toEqual([['role.created', 1]]);
     const dup = await request(app.getHttpServer())
       .post('/roles')
@@ -73,14 +74,14 @@ describe('role-service', () => {
   });
 
   it('PUT bumps version, invalidates cache, publishes role.updated (+ permissions.changed only when they change)', async () => {
-    const created = await service.create({ name: 'editor', description: null, permissions: ['a'] }, 'system');
+    const created = await service.create({ name: 'editor', description: null, permissions: ['users:read'] }, 'system');
     await cache.set(created);
     pub.events = [];
     const admin = as(['admin']);
     const res = await request(app.getHttpServer())
       .put(`/roles/${created.id}`)
       .set('x-user', admin)
-      .send({ name: 'editor', permissions: ['a', 'b'], version: 1 });
+      .send({ name: 'editor', permissions: ['users:read', 'users:write'], version: 1 });
     expect(res.status).toBe(200);
     expect(res.body.version).toBe(2);
     expect(cache.store.has(created.id)).toBe(false);
@@ -88,7 +89,7 @@ describe('role-service', () => {
     expect(pub.events[0].eventId).not.toEqual(pub.events[1].eventId);
 
     pub.events = [];
-    await request(app.getHttpServer()).put(`/roles/${created.id}`).set('x-user', admin).send({ name: 'editor', permissions: ['b', 'a'] });
+    await request(app.getHttpServer()).put(`/roles/${created.id}`).set('x-user', admin).send({ name: 'editor', permissions: ['users:write', 'users:read'] });
     expect(pub.events.map((e) => e.type)).toEqual(['role.updated']);
 
     const stale = await request(app.getHttpServer())
@@ -104,12 +105,12 @@ describe('role-service', () => {
   });
 
   it('GET /roles/:id is cache-aside: miss fills the cache, hit does not touch the DB; list works', async () => {
-    const created = await service.create({ name: 'editor', description: 'd', permissions: ['a'] }, 'system');
+    const created = await service.create({ name: 'editor', description: 'd', permissions: ['users:read'] }, 'system');
     repo.reads = 0;
     const svc = as(['service']);
     const miss = await request(app.getHttpServer()).get(`/roles/${created.id}`).set('x-user', svc);
     expect(miss.status).toBe(200);
-    expect(miss.body).toEqual({ id: created.id, name: 'editor', description: 'd', permissions: ['a'], version: 1 });
+    expect(miss.body).toEqual({ id: created.id, name: 'editor', description: 'd', permissions: ['users:read'], version: 1 });
     expect(repo.reads).toBe(1);
     await request(app.getHttpServer()).get(`/roles/${created.id}`).set('x-user', svc);
     expect(repo.reads).toBe(1);
@@ -118,12 +119,23 @@ describe('role-service', () => {
     expect(list.body).toHaveLength(1);
   });
 
-  it('RBAC: non-admin cannot write or list; service can only read by id', async () => {
+  it('RBAC: without roles:write -> 403; roles:read lists; service can only read by id', async () => {
     const body = { name: 'x', permissions: [] };
     expect((await request(app.getHttpServer()).post('/roles').set('x-user', as(['user'])).send(body)).status).toBe(403);
     expect((await request(app.getHttpServer()).get('/roles').set('x-user', as(['service']))).status).toBe(403);
     expect((await request(app.getHttpServer()).put(`/roles/${ADMIN_ID}`).set('x-user', as(['service'])).send(body)).status).toBe(403);
     expect((await request(app.getHttpServer()).get('/health')).status).toBe(200);
+    const reader = as(['operador'], ['roles:read']);
+    expect((await request(app.getHttpServer()).post('/roles').set('x-user', reader).send(body)).status).toBe(403);
+    expect((await request(app.getHttpServer()).get('/roles').set('x-user', reader)).status).toBe(200);
+  });
+
+  it('rejects unknown permissions with 400 and accepts the wildcard', async () => {
+    const admin = as(['admin']);
+    const bad = await request(app.getHttpServer()).post('/roles').set('x-user', admin).send({ name: 'x', permissions: ['docs:write'] });
+    expect(bad.status).toBe(400);
+    const ok = await request(app.getHttpServer()).post('/roles').set('x-user', admin).send({ name: 'x', permissions: ['*'] });
+    expect(ok.status).toBe(201);
   });
 
   it('seeds the admin role idempotently and re-sync emits deterministic role.updated events', async () => {
@@ -142,6 +154,17 @@ describe('role-service', () => {
       eventId: deterministicEventId(ADMIN_ID, 1),
     });
     expect(pub.events[1].eventId).toBe(pub.events[0].eventId);
+  });
+
+  it('seeds operador and auditor idempotently with stable ids', async () => {
+    const OP = '00000000-0000-4000-8000-000000000002';
+    const AU = '00000000-0000-4000-8000-000000000003';
+    await service.seedExampleRoles(OP, AU);
+    await service.seedExampleRoles(OP, AU);
+    expect(repo.items.get(OP)).toMatchObject({ name: 'operador', permissions: ['users:read', 'roles:read', 'audit:read', 'agent:ask'] });
+    expect(repo.items.get(AU)).toMatchObject({ name: 'auditor', permissions: ['audit:read'] });
+    expect(pub.events.filter((e) => e.type === 'role.created')).toHaveLength(2);
+    expect(pub.events[0].payload).toMatchObject({ roleId: OP, permissions: ['users:read', 'roles:read', 'audit:read', 'agent:ask'] });
   });
 });
 

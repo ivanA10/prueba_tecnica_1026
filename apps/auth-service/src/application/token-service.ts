@@ -85,17 +85,22 @@ export class AuthService {
     return result;
   }
 
-  private async resolveRoles(userId: string): Promise<string[]> {
+  private async resolveAccess(userId: string): Promise<{ roles: string[]; permissions: string[] }> {
     const ur = await this.projection.getUserRole(userId);
-    const name = ur ? await this.projection.getRoleName(ur.roleId) : null;
-    return name ? [name.name] : [];
+    const role = ur ? await this.projection.getRoleName(ur.roleId) : null;
+    return role ? { roles: [role.name], permissions: role.permissions } : { roles: [], permissions: [] };
+  }
+
+  private async resolveRoles(userId: string): Promise<string[]> {
+    return (await this.resolveAccess(userId)).roles;
   }
 
   private async issueSession(cred: CredentialRecord, familyId: string): Promise<LoginResult> {
-    const roles = await this.resolveRoles(cred.userId);
+    const { roles, permissions } = await this.resolveAccess(cred.userId);
     const signed = await this.issuer.sign({
       sub: cred.userId,
       roles,
+      permissions,
       audience: USER_AUDIENCE,
       ttlSeconds: this.config.accessTokenTtl,
     });

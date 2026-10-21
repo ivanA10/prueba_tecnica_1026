@@ -58,7 +58,9 @@ export class HttpRoleClient implements RoleClient {
         budgetMs,
         correlationId,
       });
-      return { id: res.body.id, name: res.body.name, version: res.body.version };
+      return { id: res.body.id, name: res.body.name, version: res.body.version,
+        permissions: res.body.permissions ?? [],
+      };
     } catch (err) {
       if (err instanceof HttpStatusError && err.status === 404) throw new RoleNotFoundError(roleId);
       throw unavailable(err);
@@ -74,7 +76,7 @@ export class HttpAuthClient implements AuthCredentialsClient {
 
   async putCredentials(
     userId: string,
-    body: { email: string; password: string; roleId: string; roleName: string; roleVersion: number },
+    body: { email: string; password: string; roleId: string; roleName: string; roleVersion: number; rolePermissions: string[] },
     budgetMs: number | undefined,
     correlationId?: string,
   ): Promise<void> {

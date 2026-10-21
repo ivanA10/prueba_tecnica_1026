@@ -39,12 +39,9 @@ export class ProjectionHandler {
       case RoutingKeys.UserRoleAssigned:
         await this.onRoleAssigned(env, p);
         break;
+      case RoutingKeys.RoleCreated:
       case RoutingKeys.RoleUpdated:
-        await this.projection.getRoleName(str(p.roleId, 'roleId')).then(async (cur) => {
-          if (!cur || env.aggregateVersion > cur.lastVersion) {
-            await this.projection.saveRoleName(str(p.roleId, 'roleId'), str(p.name, 'name'), env.aggregateVersion);
-          }
-        });
+        await this.onRoleChanged(env, p);
         break;
       default:
         throw new PermanentError(`unknown event type ${env.type}`);
@@ -89,18 +86,34 @@ export class ProjectionHandler {
     await this.projection.deleteUser(userId);
   }
 
+  /** role.created / role.updated: name + permissions, last-version-wins (equal version re-applies: resync is idempotent). */
+  private async onRoleChanged(env: EventEnvelope<Payload>, p: Payload): Promise<void> {
+    const roleId = str(p.roleId, 'roleId');
+    const name = str(p.name, 'name');
+    const permissions = Array.isArray(p.permissions)
+      ? p.permissions.filter((x): x is string => typeof x === 'string')
+      : undefined;
+    const cur = await this.projection.getRoleName(roleId);
+    if (!cur || env.aggregateVersion >= cur.lastVersion) {
+      await this.projection.saveRoleName(roleId, name, env.aggregateVersion, permissions);
+    }
+  }
+
   private async onRoleAssigned(env: EventEnvelope<Payload>, p: Payload): Promise<void> {
     const userId = str(p.userId, 'userId');
     const roleId = str(p.roleId, 'roleId');
     const roleName = str(p.roleName, 'roleName');
     const roleVersion = typeof p.roleVersion === 'number' ? p.roleVersion : 0;
+    const rolePermissions = Array.isArray(p.rolePermissions)
+      ? p.rolePermissions.filter((x): x is string => typeof x === 'string')
+      : undefined;
     const ur = await this.projection.getUserRole(userId);
     if (!ur || env.aggregateVersion > ur.lastVersion) {
       await this.projection.saveUserRole(userId, roleId, env.aggregateVersion);
     }
     const rn = await this.projection.getRoleName(roleId);
     if (!rn || roleVersion > rn.lastVersion) {
-      await this.projection.saveRoleName(roleId, roleName, roleVersion);
+      await this.projection.saveRoleName(roleId, roleName, roleVersion, rolePermissions);
     }
   }
 }
