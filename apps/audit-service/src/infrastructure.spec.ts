@@ -27,10 +27,26 @@ describe('MongoAuditRepository', () => {
     const to = new Date('2026-02-01');
     const res = await repo.query({ type: 'user.created', actor: 'a1', from, to, page: 3, limit: 10 });
     expect(res).toEqual({ items: [doc], total: 7 });
-    expect(model.find).toHaveBeenCalledWith({ type: 'user.created', actorUserId: 'a1', occurredAt: { $gte: from, $lte: to } });
+    expect(model.find).toHaveBeenCalledWith({
+      type: { $regex: '^user\\.created', $options: 'i' },
+      actorUserId: { $regex: '^a1', $options: 'i' },
+      occurredAt: { $gte: from, $lte: to },
+    });
     expect(chain.sort).toHaveBeenCalledWith({ occurredAt: -1 });
     expect(chain.skip).toHaveBeenCalledWith(20);
     expect(chain.limit).toHaveBeenCalledWith(10);
+  });
+
+  it('escapes regex metacharacters, trims, and ignores blank filters', async () => {
+    const chain = { sort: jest.fn().mockReturnThis(), skip: jest.fn().mockReturnThis(), limit: jest.fn().mockReturnThis(), lean: jest.fn().mockReturnThis(), exec: jest.fn().mockResolvedValue([]) };
+    const model = { find: jest.fn().mockReturnValue(chain), countDocuments: jest.fn().mockReturnValue({ exec: () => Promise.resolve(0) }) };
+    const repo = new MongoAuditRepository(model as never);
+    await repo.query({ type: ' .* ', actor: '   ', page: 1, limit: 10 });
+    expect(model.find).toHaveBeenCalledWith({ type: { $regex: '^\\.\\*', $options: 'i' } });
+    await repo.query({ actor: 'Sys', page: 1, limit: 10 });
+    expect(model.find).toHaveBeenLastCalledWith({
+      $or: [{ actorIsSystem: true }, { actorUserId: { $regex: '^Sys', $options: 'i' } }],
+    });
   });
 });
 

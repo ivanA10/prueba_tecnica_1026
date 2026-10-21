@@ -14,6 +14,7 @@ import {
   WarningIcon,
 } from '@/components/icons';
 import { ErrorMessage, Spinner } from '@/components/shared';
+import { useDebouncedValue } from '@/store/hooks';
 
 const EVENT_ICONS: Record<string, typeof CircleIcon> = {
   'auth.login.succeeded': SignInIcon,
@@ -55,7 +56,9 @@ export function AuditPage() {
   const [to, setTo] = useState('');
   const [page, setPage] = useState(1);
   const limit = 20;
-  const { data, isFetching, error } = useGetAuditEventsQuery({ type, actor, from, to, page, limit });
+  const debouncedType = useDebouncedValue(type, 300);
+  const debouncedActor = useDebouncedValue(actor, 300);
+  const { data, isFetching, error } = useGetAuditEventsQuery({ type: debouncedType, actor: debouncedActor, from, to, page, limit });
   const pages = data ? Math.max(1, Math.ceil(data.total / data.limit)) : 1;
   const hasFilters = !!(type || actor || from || to);
   const filter = (set: (v: string) => void) => (e: { target: { value: string } }) => {
@@ -74,11 +77,11 @@ export function AuditPage() {
       <div className="filters">
         <div className="field">
           <label htmlFor="f-type">Tipo</label>
-          <input className="input" id="f-type" placeholder="user.created" value={type} onChange={filter(setType)} />
+          <input className="input" id="f-type" placeholder="user.created o user" value={type} onChange={filter(setType)} />
         </div>
         <div className="field">
           <label htmlFor="f-actor">Actor</label>
-          <input className="input" id="f-actor" placeholder="ID o system" value={actor} onChange={filter(setActor)} />
+          <input className="input" id="f-actor" placeholder="ID (o primeros caracteres) o system" value={actor} onChange={filter(setActor)} />
         </div>
         <div className="field">
           <label htmlFor="f-from">Desde</label>

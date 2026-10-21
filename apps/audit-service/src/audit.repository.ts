@@ -1,6 +1,14 @@
 import type { Model } from 'mongoose';
 import type { AuditDocument, AuditQuery, AuditRepository } from './audit.processor';
 
+const escapeRegex = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/** Case-insensitive anchored-prefix match; null when the input is empty after trimming. */
+const prefixRegex = (value?: string): { $regex: string; $options: string } | null => {
+  const v = value?.trim();
+  return v ? { $regex: '^' + escapeRegex(v), $options: 'i' } : null;
+};
+
 /** Append-only: exposes insert and query only. */
 export class MongoAuditRepository implements AuditRepository {
   constructor(private readonly model: Model<AuditDocument>) {}
@@ -17,8 +25,15 @@ export class MongoAuditRepository implements AuditRepository {
 
   async query(q: AuditQuery): Promise<{ items: AuditDocument[]; total: number }> {
     const filter: Record<string, unknown> = {};
-    if (q.type) filter.type = q.type;
-    if (q.actor) filter.actorUserId = q.actor;
+    const type = prefixRegex(q.type);
+    const actor = prefixRegex(q.actor);
+    if (type) filter.type = type;
+    if (actor) {
+      // System events have no actorUserId (actorIsSystem) and are rendered as "system".
+      const matchesSystem = 'system'.startsWith(q.actor!.trim().toLowerCase());
+      if (matchesSystem) filter.$or = [{ actorIsSystem: true }, { actorUserId: actor }];
+      else filter.actorUserId = actor;
+    }
     if (q.from || q.to) {
       filter.occurredAt = { ...(q.from && { $gte: q.from }), ...(q.to && { $lte: q.to }) };
     }

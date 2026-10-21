@@ -88,9 +88,10 @@ describe('roles, audit, agent, layout', () => {
     renderApp(<AuditPage />);
     expect(await screen.findByText('user.created')).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Tipo'), { target: { value: 'login' } });
-    await screen.findByText('user.created');
-    const urls = f.mock.calls.map((c) => (c[0] as Request).url);
-    expect(urls.some((u) => u.includes('type=login'))).toBe(true);
+    const urls = () => f.mock.calls.map((c) => (c[0] as Request).url);
+    // debounced: not queried immediately, only after the 300ms pause
+    expect(urls().some((u) => u.includes('type=login'))).toBe(false);
+    await waitFor(() => expect(urls().some((u) => u.includes('type=login'))).toBe(true));
   });
 
   it('audit clear-filters resets the inputs and role dialog has no delete action', async () => {
