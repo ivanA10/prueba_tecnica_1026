@@ -1,4 +1,4 @@
-# Infraestructura local de Toka (solo almacenes y broker; los servicios llegan en el cambio 5).
+# Sistema Toka completo: infraestructura + 5 servicios + web (nginx :8080).
 # Diseno: docs/architecture/04-docker-compose-diseno.md
 # Etiquetas de imagen needs-verification: postgres:17, mongo:7, redis:7,
 # rabbitmq:3.13-management, qdrant/qdrant:v1.15.0 (fijar/actualizar al instalar).
@@ -7,6 +7,42 @@ name: toka
 x-infra-defaults: &infra-defaults
   restart: unless-stopped
   networks: [backend]
+
+x-app-defaults: &app-defaults
+  restart: unless-stopped
+  networks: [edge, backend]
+
+# Healthchecks de Node (las imagenes slim no traen curl/wget); un ancla por puerto.
+x-hc-3001: &hc-3001
+  test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+  interval: 10s
+  timeout: 4s
+  retries: 12
+  start_period: 30s
+x-hc-3002: &hc-3002
+  test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3002/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+  interval: 10s
+  timeout: 4s
+  retries: 12
+  start_period: 30s
+x-hc-3003: &hc-3003
+  test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3003/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+  interval: 10s
+  timeout: 4s
+  retries: 12
+  start_period: 30s
+x-hc-3004: &hc-3004
+  test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3004/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+  interval: 10s
+  timeout: 4s
+  retries: 12
+  start_period: 30s
+x-hc-3005: &hc-3005
+  test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3005/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+  interval: 10s
+  timeout: 4s
+  retries: 12
+  start_period: 60s
 
 services:
   postgres:
@@ -83,6 +119,93 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
+
+  # ---------------------------------------------------------------- aplicaciones
+  auth-service:
+    <<: *app-defaults
+    build: { context: ., dockerfile: apps/auth-service/Dockerfile }
+    image: toka/auth-service:local
+    env_file: infra/env/auth-service.env
+    secrets: [jwt_private.pem]
+    healthcheck: *hc-3001
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+
+  role-service:
+    <<: *app-defaults
+    build: { context: ., dockerfile: apps/role-service/Dockerfile }
+    image: toka/role-service:local
+    env_file: infra/env/role-service.env
+    healthcheck: *hc-3003
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      auth-service: { condition: service_healthy }
+
+  user-service:
+    <<: *app-defaults
+    build: { context: ., dockerfile: apps/user-service/Dockerfile }
+    image: toka/user-service:local
+    env_file: infra/env/user-service.env
+    healthcheck: *hc-3002
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      auth-service: { condition: service_healthy }
+      role-service: { condition: service_healthy }
+
+  audit-service:
+    <<: *app-defaults
+    build: { context: ., dockerfile: apps/audit-service/Dockerfile }
+    image: toka/audit-service:local
+    env_file: infra/env/audit-service.env
+    healthcheck: *hc-3004
+    depends_on:
+      mongo: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      auth-service: { condition: service_healthy }
+
+  ai-agent-service:
+    <<: *app-defaults
+    build: { context: ., dockerfile: apps/ai-agent-service/Dockerfile }
+    image: toka/ai-agent-service:local
+    env_file: infra/env/ai-agent-service.env
+    networks: [edge, backend, egress]
+    healthcheck: *hc-3005
+    depends_on:
+      redis: { condition: service_healthy }
+      qdrant: { condition: service_healthy }
+      auth-service: { condition: service_healthy }
+      user-service: { condition: service_healthy }
+
+  web:
+    build: { context: ., dockerfile: apps/web/Dockerfile }
+    image: toka/web:local
+    restart: unless-stopped
+    networks: [public, edge]
+    ports:
+      - "${WEB_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/healthz >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    depends_on:
+      auth-service: { condition: service_healthy }
+      user-service: { condition: service_healthy }
+      role-service: { condition: service_healthy }
+      audit-service: { condition: service_healthy }
+      ai-agent-service: { condition: service_healthy }
+
+secrets:
+  jwt_private.pem:
+    file: ./secrets/jwt_private.pem
 
 networks:
   public: {}

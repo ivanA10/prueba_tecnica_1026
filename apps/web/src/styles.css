@@ -1,0 +1,10 @@
+body{font-family:system-ui,sans-serif;margin:0;color:#1f2933}
+nav{display:flex;gap:1rem;padding:.75rem 1rem;background:#102a43;color:#fff;align-items:center}
+nav a{color:#fff}main{padding:1rem;max-width:960px;margin:auto}
+table{border-collapse:collapse;width:100%}td,th{border:1px solid #d9e2ec;padding:.4rem;text-align:left}
+label{display:block;margin:.5rem 0}.field-error,.error{color:#b91c1c}
+.toasts{position:fixed;top:1rem;right:1rem;display:flex;flex-direction:column;gap:.5rem}
+.toast{padding:.6rem 1rem;border-radius:4px;color:#fff}.toast.success{background:#15803d}.toast.error{background:#b91c1c}
+.dialog{position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center}
+.dialog>div{background:#fff;padding:1.5rem;border-radius:6px}
+.chat{border:1px solid #d9e2ec;padding:.5rem;min-height:120px}

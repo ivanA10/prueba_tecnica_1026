@@ -1,0 +1,66 @@
+generator client {
+  provider      = "prisma-client-js"
+  output        = "../src/generated/prisma"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum CredentialStatus {
+  PENDING
+  ACTIVE
+  DISABLED
+}
+
+model Credential {
+  userId       String           @id @map("user_id") @db.Uuid
+  email        String           @unique
+  passwordHash String           @map("password_hash")
+  status       CredentialStatus @default(PENDING)
+  createdAt    DateTime         @default(now()) @map("created_at")
+  updatedAt    DateTime         @updatedAt @map("updated_at")
+
+  @@map("credentials")
+}
+
+model UserRoleProjection {
+  userId          String   @id @map("user_id") @db.Uuid
+  roleId          String   @map("role_id") @db.Uuid
+  userLastVersion Int      @default(0) @map("user_last_version")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("user_roles_projection")
+}
+
+model RoleNameProjection {
+  roleId      String @id @map("role_id") @db.Uuid
+  roleName    String @map("role_name")
+  lastVersion Int    @default(0) @map("last_version")
+
+  @@map("role_names_projection")
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  tokenHash String    @unique @map("token_hash")
+  userId    String    @map("user_id") @db.Uuid
+  familyId  String    @map("family_id") @db.Uuid
+  expiresAt DateTime  @map("expires_at")
+  rotatedAt DateTime? @map("rotated_at")
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([familyId])
+  @@map("refresh_tokens")
+}
+
+model ProcessedEvent {
+  eventId     String   @id @map("event_id") @db.Uuid
+  processedAt DateTime @default(now()) @map("processed_at")
+
+  @@map("processed_events")
+}
