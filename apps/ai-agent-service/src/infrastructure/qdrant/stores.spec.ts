@@ -30,9 +30,9 @@ describe('QdrantKnowledgeStore', () => {
       createPayloadIndex: jest.fn().mockResolvedValue({}),
       delete: jest.fn().mockResolvedValue({}),
       upsert: jest.fn().mockResolvedValue({}),
-      search: jest.fn().mockResolvedValue([
-        { score: 0.9, payload: { docId: 'a', source: 's', chunkIdx: 0, roleScope: ['all'], text: 't' } },
-      ]),
+      query: jest.fn().mockResolvedValue({
+        points: [{ score: 0.9, payload: { docId: 'a', source: 's', chunkIdx: 0, roleScope: ['all'], text: 't' } }],
+      }),
     };
     const s = new QdrantKnowledgeStore(client as unknown as QdrantClientLike);
     await s.ensureCollection();
@@ -45,7 +45,8 @@ describe('QdrantKnowledgeStore', () => {
     expect(pointId('a', 0)).toBe(pointId('a', 0));
 
     const hits = await s.search([1], { roleScopes: ['admin', 'all'], limit: 3 });
-    expect(client.search.mock.calls[0][1].filter.must[0]).toEqual({ key: 'roleScope', match: { any: ['admin', 'all'] } });
+    expect(client.query.mock.calls[0][1].query).toEqual([1]);
+    expect(client.query.mock.calls[0][1].filter.must[0]).toEqual({ key: 'roleScope', match: { any: ['admin', 'all'] } });
     expect(hits[0]).toMatchObject({ docId: 'a', score: 0.9 });
     await expect(s.search([1], { roleScopes: [], limit: 1 })).rejects.toThrow();
   });

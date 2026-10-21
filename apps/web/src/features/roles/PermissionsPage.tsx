@@ -35,9 +35,9 @@ export function PermissionsPage() {
         <table className="table matrix" aria-label="Matriz de roles y permisos">
           <thead>
             <tr>
-              <th>Permiso</th>
+              <th scope="col">Permiso</th>
               {roles.map((r) => (
-                <th key={r.id} className="col-role">
+                <th key={r.id} scope="col" className="col-role">
                   <span className="th-inner">
                     {r.permissions.includes(WILDCARD) && <CrownIcon size={14} />}
                     {r.name}

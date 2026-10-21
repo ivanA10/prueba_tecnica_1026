@@ -92,7 +92,10 @@ export class KnowledgeBootstrap implements OnModuleInit {
       provide: KNOWLEDGE_STORE_TOKEN,
       inject: [AGENT_CONFIG],
       useFactory: (cfg: AgentConfig) =>
-        new QdrantKnowledgeStore(new QdrantClient({ url: cfg.qdrantUrl }) as unknown as QdrantClientLike),
+        new QdrantKnowledgeStore(
+          // checkCompatibility off: the Qdrant server version is pinned in docker-compose.yml.
+          new QdrantClient({ url: cfg.qdrantUrl, checkCompatibility: false }) as unknown as QdrantClientLike,
+        ),
     },
     {
       provide: INGEST_USE_CASE,
@@ -109,6 +112,7 @@ export class KnowledgeBootstrap implements OnModuleInit {
           llm: createLlmProvider(cfg),
           users: new HttpUserDirectoryGateway({ baseUrl: cfg.userServiceUrl, timeoutMs: cfg.userToolTimeoutMs }),
           metrics: new LoggerMetricsRecorder(logger),
+          logger,
           settings: cfg,
           priceEnv: { LLM_PRICE_INPUT_PER_MTOK: cfg.llmPriceInput, LLM_PRICE_OUTPUT_PER_MTOK: cfg.llmPriceOutput },
         }),

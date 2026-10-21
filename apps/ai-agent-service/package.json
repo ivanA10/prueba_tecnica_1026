@@ -19,7 +19,7 @@
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "@anthropic-ai/sdk": "^0.60.0",
-    "@qdrant/js-client-rest": "^1.13.0",
+    "@qdrant/js-client-rest": "~1.19.0",
     "@huggingface/transformers": "^3.5.0",
     "onnxruntime-node": "^1.21.0",
     "ioredis": "^5.4.1",
