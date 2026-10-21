@@ -41,6 +41,7 @@ export interface RoleInfo {
   id: string;
   name: string;
   version: number;
+  permissions: string[];
 }
 
 export class RoleNotFoundError extends Error {}
@@ -54,7 +55,7 @@ export interface RoleClient {
 export interface AuthCredentialsClient {
   putCredentials(
     userId: string,
-    body: { email: string; password: string; roleId: string; roleName: string; roleVersion: number },
+    body: { email: string; password: string; roleId: string; roleName: string; roleVersion: number; rolePermissions: string[] },
     budgetMs: number | undefined,
     correlationId?: string,
   ): Promise<void>;

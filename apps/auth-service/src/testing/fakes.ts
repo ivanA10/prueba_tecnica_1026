@@ -35,7 +35,7 @@ export class FakeCredentials implements CredentialRepository {
 
 export class FakeProjection implements ProjectionRepository {
   users = new Map<string, { roleId: string; lastVersion: number }>();
-  roles = new Map<string, { name: string; lastVersion: number }>();
+  roles = new Map<string, { name: string; lastVersion: number; permissions: string[] }>();
   processed = new Set<string>();
   async getUserRole(id: string) {
     return this.users.get(id) ?? null;
@@ -50,8 +50,8 @@ export class FakeProjection implements ProjectionRepository {
   async getRoleName(id: string) {
     return this.roles.get(id) ?? null;
   }
-  async saveRoleName(id: string, name: string, lastVersion: number) {
-    this.roles.set(id, { name, lastVersion });
+  async saveRoleName(id: string, name: string, lastVersion: number, permissions?: string[]) {
+    this.roles.set(id, { name, lastVersion, permissions: permissions ?? this.roles.get(id)?.permissions ?? [] });
   }
   async deleteUser(id: string) {
     this.users.delete(id);

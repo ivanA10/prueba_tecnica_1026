@@ -11,7 +11,7 @@ describe('session and api client', () => {
   it('setSession decodes sub/roles and clearSession resets', () => {
     const store = makeStore();
     store.dispatch(setSession({ accessToken: adminToken }));
-    expect(store.getState().session.user).toEqual({ id: 'u1', roles: ['admin'] });
+    expect(store.getState().session.user).toEqual({ id: 'u1', roles: ['admin'], permissions: ['*'] });
     store.dispatch(clearSession());
     expect(store.getState().session).toMatchObject({ status: 'anonymous', accessToken: null });
     expect(decodeJwt('garbage')).toBeNull();

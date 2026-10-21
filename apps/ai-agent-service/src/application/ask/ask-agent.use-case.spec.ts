@@ -16,12 +16,12 @@ async function setup(llm: LlmProvider, users = { lookup: jest.fn().mockResolvedV
   const metrics = { record: jest.fn() };
   const uc = new AskAgentUseCase({
     embedder, store, llm, users, metrics,
-    settings: { adminRole: 'admin', ragTopK: 3, ragMinScore: 0.1, llmMaxTokens: 100, llmTimeoutMs: 1000, agentDeadlineMs: 200 },
+    settings: { ragTopK: 3, ragMinScore: 0.1, llmMaxTokens: 100, llmTimeoutMs: 1000, agentDeadlineMs: 200 },
     priceEnv: { LLM_PRICE_INPUT_PER_MTOK: '1', LLM_PRICE_OUTPUT_PER_MTOK: '2' },
   });
   return { uc, metrics, users };
 }
-const input = (question: string, roles: string[]) => ({ question, roles, authorization: 'Bearer t' });
+const input = (question: string, roles: string[], permissions: string[] = []) => ({ question, roles, permissions, authorization: 'Bearer t' });
 
 describe('AskAgentUseCase', () => {
   it('happy path: grounded answer with sources, tokens, cost and metrics', async () => {
@@ -73,14 +73,18 @@ describe('AskAgentUseCase', () => {
     expect(validateAgentOutput('{"answer":', ['roles'])).toBeNull();
   });
 
-  it('calls lookup_users for admins and continues without it when the tool fails (403)', async () => {
+  it('offers lookup_users only with users:read and continues without it when the tool fails (403)', async () => {
     const { uc, users } = await setup(new MockProvider());
-    const ok = await uc.ask(input('Cuantos usuarios hay?', ['admin']));
+    const none = await uc.ask(input('Cuantos usuarios hay?', ['auditor'], ['audit:read']));
+    expect(none.meta.toolCalls).toBe(0);
+    expect(users.lookup).not.toHaveBeenCalled();
+
+    const ok = await uc.ask(input('Cuantos usuarios hay?', ['operador'], ['users:read']));
     expect(ok.meta.toolCalls).toBe(1);
     expect(users.lookup).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ authorization: 'Bearer t' }));
 
     users.lookup.mockRejectedValueOnce(new UserToolUnavailableError('forbidden', 403));
-    const denied = await uc.ask(input('Cuantos usuarios hay?', ['admin']));
+    const denied = await uc.ask(input('Cuantos usuarios hay?', ['admin'], ['*']));
     expect(denied.degraded).toBe(false);
     expect(denied.meta.toolCalls).toBe(0);
   });

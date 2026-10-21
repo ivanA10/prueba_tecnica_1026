@@ -58,7 +58,7 @@ const actor = { userId: 'admin', roles: ['admin'] };
 function setup(opts: { clock?: () => number } = {}) {
   const repo = new FakeRepo();
   const roles: jest.Mocked<RoleClient> = {
-    getRole: jest.fn().mockResolvedValue({ id: 'r1', name: 'admin', version: 4 }),
+    getRole: jest.fn().mockResolvedValue({ id: 'r1', name: 'admin', version: 4, permissions: ['users:read'] }),
   };
   const auth: jest.Mocked<AuthCredentialsClient> = {
     putCredentials: jest.fn().mockResolvedValue(undefined),
@@ -78,7 +78,7 @@ describe('UsersService signup saga', () => {
     expect(u.version).toBe(2);
     expect(auth.putCredentials).toHaveBeenCalledWith(
       u.id,
-      { email: input.email, password: input.password, roleId: 'r1', roleName: 'admin', roleVersion: 4 },
+      { email: input.email, password: input.password, roleId: 'r1', roleName: 'admin', roleVersion: 4, rolePermissions: ['users:read'] },
       expect.any(Number),
       'cid',
     );
@@ -141,7 +141,7 @@ describe('UsersService lifecycle', () => {
       {
         type: 'user.role.assigned',
         aggregateVersion: 4,
-        payload: { userId: u.id, roleId: 'r1', roleName: 'admin', roleVersion: 4 },
+        payload: { userId: u.id, roleId: 'r1', roleName: 'admin', roleVersion: 4, rolePermissions: ['users:read'] },
       },
       { type: 'user.deleted', aggregateVersion: 5 },
     ]);

@@ -59,7 +59,7 @@ export async function runEval(
   const results: CaseResult[] = [];
   let provider = 'n/d';
   for (const c of cases) {
-    const r = await useCase.ask({ question: c.question, roles: c.roles, authorization: 'Bearer eval' });
+    const r = await useCase.ask({ question: c.question, roles: c.roles, permissions: c.permissions ?? [], authorization: 'Bearer eval' });
     provider = r.meta.provider;
     const cited = r.sources.map((s) => s.docId);
     const lower = r.answer.toLowerCase();

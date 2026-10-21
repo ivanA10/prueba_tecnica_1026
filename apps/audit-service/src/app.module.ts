@@ -11,7 +11,6 @@ import { AUDIT_OPTIONS, AUDIT_REPOSITORY, AuditDocument, AuditProcessor } from '
 import { MongoAuditRepository } from './audit.repository';
 import { AuditEventSchema } from './audit.schema';
 import { loadConfig } from './config';
-import { RolesGuard } from './roles.guard';
 
 const config = loadConfig();
 const connection = mongoose.createConnection(config.mongoUrl);
@@ -44,7 +43,6 @@ connection.on('error', () => undefined);
     },
     Reflector,
     JwtAuthGuard,
-    RolesGuard,
     AuditProcessor,
     AuditConsumer,
   ],

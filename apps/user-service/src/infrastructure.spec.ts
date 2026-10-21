@@ -22,12 +22,12 @@ describe('clients', () => {
     await expect(new HttpRoleClient(http as never, tokens).getRole('r', 1000)).rejects.toBeInstanceOf(RoleNotFoundError);
 
     http.request.mockResolvedValueOnce({ status: 200, body: { id: 'r', name: 'admin', version: 2, extra: 1 } });
-    expect(await new HttpRoleClient(http as never, tokens).getRole('r', 1000)).toEqual({ id: 'r', name: 'admin', version: 2 });
+    expect(await new HttpRoleClient(http as never, tokens).getRole('r', 1000)).toEqual({ id: 'r', name: 'admin', version: 2, permissions: [] });
 
     const auth = new HttpAuthClient(http as never, tokens);
     http.request.mockRejectedValueOnce(new HttpStatusError(409, {}, 'u'));
     await expect(
-      auth.putCredentials('u', { email: 'e', password: 'p', roleId: 'r', roleName: 'n', roleVersion: 1 }, 1000),
+      auth.putCredentials('u', { email: 'e', password: 'p', roleId: 'r', roleName: 'n', roleVersion: 1, rolePermissions: [] }, 1000),
     ).rejects.toThrow();
     http.request.mockRejectedValueOnce(new HttpStatusError(404, {}, 'u'));
     await expect(auth.deleteCredentials('u')).resolves.toBeUndefined();

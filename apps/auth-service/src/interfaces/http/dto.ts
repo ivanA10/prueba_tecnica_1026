@@ -1,4 +1,4 @@
-import { IsInt, IsOptional, IsString, IsUUID, MinLength } from 'class-validator';
+import { IsArray, IsInt, IsOptional, IsString, IsUUID, MinLength } from 'class-validator';
 
 export class LoginDto {
   @IsString()
@@ -43,4 +43,9 @@ export class UpsertCredentialDto {
   @IsOptional()
   @IsInt()
   roleVersion?: number;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  rolePermissions?: string[];
 }

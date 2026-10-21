@@ -10,7 +10,7 @@ function routes() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
-      <Route path="/users" element={<p>users home</p>} />
+      <Route path="/" element={<p>app home</p>} />
       <Route element={<RequireAuth />}>
         <Route path="/private" element={<p>secret</p>} />
       </Route>
@@ -20,7 +20,7 @@ function routes() {
 
 function fill(email: string, password: string) {
   fireEvent.change(screen.getByLabelText('Email'), { target: { value: email } });
-  fireEvent.change(screen.getByLabelText('Contrasena'), { target: { value: password } });
+  fireEvent.change(screen.getByLabelText('Contraseña'), { target: { value: password } });
   fireEvent.click(screen.getByRole('button', { name: 'Entrar' }));
 }
 
@@ -29,7 +29,7 @@ describe('auth', () => {
     const f = mockFetch(() => undefined);
     renderApp(routes(), { route: '/login', token: null });
     fill('bad', '');
-    expect(await screen.findByText('Email invalido')).toBeInTheDocument();
+    expect(await screen.findByText('Email inválido')).toBeInTheDocument();
     expect(f).not.toHaveBeenCalled();
   });
 
@@ -37,15 +37,15 @@ describe('auth', () => {
     mockFetch(() => ({ body: { accessToken: adminToken, expiresIn: 900 } }));
     const { store } = renderApp(routes(), { route: '/login', token: null });
     fill('a@b.com', 'secret');
-    expect(await screen.findByText('users home')).toBeInTheDocument();
+    expect(await screen.findByText('app home')).toBeInTheDocument();
     expect(store.getState().session.status).toBe('authenticated');
   });
 
   it('shows the 401 message', async () => {
-    mockFetch(() => ({ status: 401, body: { message: 'Credenciales invalidas' } }));
+    mockFetch(() => ({ status: 401, body: { message: 'Credenciales inválidas' } }));
     renderApp(routes(), { route: '/login', token: null });
     fill('a@b.com', 'secret');
-    expect(await screen.findByRole('alert')).toHaveTextContent('Credenciales invalidas');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Credenciales inválidas');
   });
 
   it('RequireAuth waits on unknown, redirects when anonymous, renders when authenticated', async () => {
@@ -55,7 +55,7 @@ describe('auth', () => {
     unknown.unmount();
     const { store } = renderApp(routes(), { route: '/private', token: null });
     store.dispatch({ type: 'session/clearSession' });
-    await waitFor(() => expect(screen.getByRole('heading', { name: 'Iniciar sesion' })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Iniciar sesión' })).toBeInTheDocument());
     renderApp(routes(), { route: '/private' });
     expect(await screen.findByText('secret')).toBeInTheDocument();
   });

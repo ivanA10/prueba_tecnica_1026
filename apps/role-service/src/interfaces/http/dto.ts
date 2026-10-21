@@ -1,4 +1,15 @@
-import { ArrayMaxSize, IsArray, IsInt, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { isKnownPermission, WILDCARD } from '@toka/contracts';
+import { ArrayMaxSize, IsArray, IsInt, IsOptional, IsString, MaxLength, Validate, ValidationArguments, ValidatorConstraint, ValidatorConstraintInterface, MinLength } from 'class-validator';
+
+@ValidatorConstraint({ name: 'knownPermissions', async: false })
+class KnownPermissions implements ValidatorConstraintInterface {
+  validate(value: unknown): boolean {
+    return Array.isArray(value) && value.every((p) => typeof p === 'string' && (p === WILDCARD || isKnownPermission(p)));
+  }
+  defaultMessage(args: ValidationArguments): string {
+    return `${args.property} must contain only '*' or known permissions`;
+  }
+}
 
 export class RoleBodyDto {
   @IsString()
@@ -14,6 +25,7 @@ export class RoleBodyDto {
   @IsArray()
   @ArrayMaxSize(200)
   @IsString({ each: true })
+  @Validate(KnownPermissions)
   permissions!: string[];
 
   /** Optional optimistic-concurrency check (PUT only). */

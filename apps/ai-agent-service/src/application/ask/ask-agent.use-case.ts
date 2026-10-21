@@ -1,3 +1,4 @@
+import { PERMISSIONS, hasPermission } from '@toka/contracts';
 import type { AgentMetricsRecorder } from '../ports/agent-metrics-recorder.port';
 import type { EmbeddingProvider } from '../ports/embedding-provider.port';
 import type { KnowledgeStore, SearchHit } from '../ports/knowledge-store.port';
@@ -21,7 +22,6 @@ export const LOOKUP_USERS_TOOL: LlmTool = {
 };
 
 export interface AskSettings {
-  adminRole: string;
   ragTopK: number;
   ragMinScore: number;
   llmMaxTokens: number;
@@ -43,6 +43,7 @@ export interface AskDeps {
 export interface AskInput {
   question: string;
   roles: string[];
+  permissions: string[];
   authorization: string;
   correlationId?: string;
 }
@@ -75,7 +76,7 @@ export class AskAgentUseCase {
       const found = await guard(this.deps.store.search(vector, { roleScopes, limit: cfg.ragTopK }));
       hits = found.filter((h) => h.score >= cfg.ragMinScore);
 
-      const tools = input.roles.includes(cfg.adminRole) ? [LOOKUP_USERS_TOOL] : undefined;
+      const tools = hasPermission(input.permissions, PERMISSIONS.USERS_READ) ? [LOOKUP_USERS_TOOL] : undefined;
       let messages: LlmMessage[] = buildMessages(input.question, hits);
       const call = async (msgs: LlmMessage[], withTools: LlmTool[] | undefined) => {
         const remaining = cfg.agentDeadlineMs - (this.now() - start);
@@ -113,7 +114,7 @@ export class AskAgentUseCase {
             results.push({ role: 'tool', toolCallId: c.id, content: wrapToolResult(JSON.stringify(users)) });
           } catch (err) {
             if (ctrl.signal.aborted) throw err;
-            // tool unavailable (e.g. 403 for non-admin callers): continue without it
+            // tool unavailable (e.g. 403 for callers without users:read): continue without it
           }
         }
         if (results.length > 0) {

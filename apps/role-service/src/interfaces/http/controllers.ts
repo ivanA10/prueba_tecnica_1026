@@ -10,11 +10,11 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
-import { JwtAuthGuard, AuthenticatedUser } from '@toka/jwt-guard';
+import { PERMISSIONS } from '@toka/contracts';
+import { AllowServiceToken, AuthenticatedUser, JwtAuthGuard, PermissionsGuard, RequirePermissions } from '@toka/jwt-guard';
 import { RoleService } from '../../application/role-service';
 import type { Role } from '../../domain/role';
 import { RoleBodyDto } from './dto';
-import { Roles, RolesGuard } from './roles.guard';
 
 type Authed = { user: AuthenticatedUser };
 
@@ -27,12 +27,12 @@ const toDto = (r: Role) => ({
 });
 
 @Controller('roles')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, PermissionsGuard)
 export class RolesController {
   constructor(private readonly roles: RoleService) {}
 
   @Post()
-  @Roles('admin')
+  @RequirePermissions(PERMISSIONS.ROLES_WRITE)
   async create(@Body() dto: RoleBodyDto, @Req() req: Authed) {
     const role = await this.roles.create(
       { name: dto.name, description: dto.description ?? null, permissions: dto.permissions },
@@ -42,19 +42,20 @@ export class RolesController {
   }
 
   @Get()
-  @Roles('admin')
+  @RequirePermissions(PERMISSIONS.ROLES_READ)
   async list() {
     return (await this.roles.list()).map(toDto);
   }
 
   @Get(':id')
-  @Roles('admin', 'service')
+  @RequirePermissions(PERMISSIONS.ROLES_READ)
+  @AllowServiceToken()
   async get(@Param('id', ParseUUIDPipe) id: string) {
     return toDto(await this.roles.get(id));
   }
 
   @Put(':id')
-  @Roles('admin')
+  @RequirePermissions(PERMISSIONS.ROLES_WRITE)
   @HttpCode(200)
   async update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: RoleBodyDto, @Req() req: Authed) {
     const role = await this.roles.update(

@@ -6,6 +6,7 @@ import {
   EventEnvelope,
   QueueBindings,
   RETRY_COUNT_HEADER,
+  RoutingKeys,
 } from '@toka/contracts';
 import type { EventPublisher } from '../../application/ports';
 import type { MessageProcessor } from '../../application/projection-handler';
@@ -57,7 +58,8 @@ export class AmqpBroker implements EventPublisher {
       await ch.assertExchange(EVENTS_EXCHANGE, 'topic', { durable: true });
       await ch.assertExchange(DLX_EXCHANGE, 'direct', { durable: true });
       await ch.assertQueue(PROJECTION_QUEUE, { durable: true });
-      for (const key of QueueBindings[PROJECTION_QUEUE]) await ch.bindQueue(PROJECTION_QUEUE, EVENTS_EXCHANGE, key);
+      const keys = new Set<string>([...QueueBindings[PROJECTION_QUEUE], RoutingKeys.RoleCreated]); // role.created carries permissions
+      for (const key of keys) await ch.bindQueue(PROJECTION_QUEUE, EVENTS_EXCHANGE, key);
       await ch.bindQueue(PROJECTION_QUEUE, DLX_EXCHANGE, PROJECTION_QUEUE);
       await ch.assertQueue(RETRY_QUEUE, {
         durable: true,

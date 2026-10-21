@@ -3,4 +3,5 @@ export interface UserRoleAssignedPayload {
   roleId: string;
   roleName: string;
   roleVersion: number;
+  rolePermissions: string[];
 }

@@ -7,10 +7,14 @@ export interface RoleConfig {
   jwtIssuer: string;
   cacheTtlSeconds: number;
   adminRoleId: string;
+  operadorRoleId: string;
+  auditorRoleId: string;
   publishRetries: number;
 }
 
 export const DEFAULT_ADMIN_ROLE_ID = '00000000-0000-4000-8000-000000000001';
+export const DEFAULT_OPERADOR_ROLE_ID = '00000000-0000-4000-8000-000000000002';
+export const DEFAULT_AUDITOR_ROLE_ID = '00000000-0000-4000-8000-000000000003';
 
 function required(env: NodeJS.ProcessEnv, name: string): string {
   const v = env[name];
@@ -36,6 +40,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): RoleConfig {
     jwtIssuer: env.JWT_ISSUER || 'toka-auth',
     cacheTtlSeconds: int(env, 'ROLE_CACHE_TTL_SECONDS', 300),
     adminRoleId: env.ADMIN_ROLE_ID || DEFAULT_ADMIN_ROLE_ID,
+    operadorRoleId: env.OPERADOR_ROLE_ID || DEFAULT_OPERADOR_ROLE_ID,
+    auditorRoleId: env.AUDITOR_ROLE_ID || DEFAULT_AUDITOR_ROLE_ID,
     publishRetries: int(env, 'PUBLISH_RETRIES', 3),
   };
 }

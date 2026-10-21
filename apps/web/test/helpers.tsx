@@ -10,7 +10,8 @@ export function makeJwt(payload: Record<string, unknown>): string {
   return `${b64({ alg: 'none' })}.${b64(payload)}.sig`;
 }
 
-export const adminToken = makeJwt({ sub: 'u1', roles: ['admin'] });
+export const adminToken = makeJwt({ sub: 'u1', roles: ['admin'], permissions: ['*'] });
+export const userToken = makeJwt({ sub: 'u2', roles: ['user'], permissions: [] });
 
 export type Handler = (req: { url: string; method: string; body: string; auth: string | null }) => { status?: number; body?: unknown } | undefined;
 
@@ -31,7 +32,7 @@ export function mockFetch(handler: Handler) {
 
 export function renderApp(ui: ReactElement, opts: { admin?: boolean; route?: string; token?: string | null } = {}) {
   const store = makeStore();
-  if (opts.token !== null) store.dispatch(setSession({ accessToken: opts.token ?? (opts.admin === false ? makeJwt({ sub: 'u2', roles: ['user'] }) : adminToken) }));
+  if (opts.token !== null) store.dispatch(setSession({ accessToken: opts.token ?? (opts.admin === false ? userToken : adminToken) }));
   const utils = render(
     <Provider store={store}>
       <MemoryRouter initialEntries={[opts.route ?? '/']}>{ui}</MemoryRouter>

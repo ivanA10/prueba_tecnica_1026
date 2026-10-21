@@ -78,6 +78,7 @@ export class UsersService {
           roleId: role.id,
           roleName: role.name,
           roleVersion: role.version,
+          rolePermissions: role.permissions,
         },
         remaining(),
         correlationId,
@@ -188,7 +189,7 @@ export class UsersService {
           aggregateVersion: u.version,
           correlationId,
           actor,
-          payload: { userId: u.id, roleId: role.id, roleName: role.name, roleVersion: role.version },
+          payload: { userId: u.id, roleId: role.id, roleName: role.name, roleVersion: role.version, rolePermissions: role.permissions },
         }),
       );
       return this.view(user);

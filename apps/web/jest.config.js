@@ -18,6 +18,7 @@ module.exports = {
   moduleNameMapper: {
     '^@/config$': '<rootDir>/test/configMock.ts',
     '^@/(.*)$': '<rootDir>/src/$1',
+    '^@toka/contracts$': '<rootDir>/../../packages/contracts/src/permissions.ts',
     '\.(css|svg|png)$': '<rootDir>/test-style-mock.js',
   },
 };

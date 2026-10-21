@@ -56,14 +56,14 @@ export class PrismaProjectionRepository implements ProjectionRepository {
 
   async getRoleName(roleId: string) {
     const r = await this.db.roleNameProjection.findUnique({ where: { roleId } });
-    return r ? { name: r.roleName, lastVersion: r.lastVersion } : null;
+    return r ? { name: r.roleName, lastVersion: r.lastVersion, permissions: r.permissions ?? [] } : null;
   }
 
-  async saveRoleName(roleId: string, name: string, lastVersion: number): Promise<void> {
+  async saveRoleName(roleId: string, name: string, lastVersion: number, permissions?: string[]): Promise<void> {
     await this.db.roleNameProjection.upsert({
       where: { roleId },
-      create: { roleId, roleName: name, lastVersion },
-      update: { roleName: name, lastVersion },
+      create: { roleId, roleName: name, lastVersion, permissions: permissions ?? [] },
+      update: { roleName: name, lastVersion, ...(permissions ? { permissions } : {}) },
     });
   }
 

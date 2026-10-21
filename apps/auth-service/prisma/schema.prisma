@@ -39,6 +39,7 @@ model RoleNameProjection {
   roleId      String @id @map("role_id") @db.Uuid
   roleName    String @map("role_name")
   lastVersion Int    @default(0) @map("last_version")
+  permissions String[] @default([])
 
   @@map("role_names_projection")
 }
