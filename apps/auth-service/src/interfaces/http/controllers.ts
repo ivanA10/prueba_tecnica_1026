@@ -6,12 +6,14 @@ import {
   Get,
   HttpCode,
   Inject,
+  Optional,
   Param,
   ParseUUIDPipe,
   Post,
   Put,
   Req,
   Res,
+  ServiceUnavailableException,
   UseGuards,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
@@ -22,7 +24,7 @@ import { TOKENS } from '../../application/ports';
 import { AuthService, LoginResult, ServiceTokenService } from '../../application/token-service';
 import type { JoseTokenIssuer } from '../../infrastructure/crypto/crypto';
 import { LoginDto, OAuthTokenDto, UpsertCredentialDto } from './dto';
-import { Roles, RolesGuard } from './roles.guard';
+import { ServiceTokenGuard } from './service-token.guard';
 
 export const REFRESH_COOKIE = 'refresh_token';
 const COOKIE_PATH = '/api/auth';
@@ -103,8 +105,7 @@ export class JwksController {
 }
 
 @Controller('internal/credentials')
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('service')
+@UseGuards(JwtAuthGuard, ServiceTokenGuard)
 export class InternalCredentialsController {
   constructor(private readonly credentials: CredentialsService) {}
 
@@ -126,15 +127,25 @@ export class InternalCredentialsController {
   }
 }
 
+/** Dependency checks for /ready (Postgres, Redis, AMQP topology + consumer). */
+export const READINESS = 'READINESS';
+export type ReadinessCheck = () => Promise<Record<string, boolean>>;
+
 @Controller()
 export class HealthController {
+  constructor(@Optional() @Inject(READINESS) private readonly readiness?: ReadinessCheck) {}
+
   @Get('health')
   health() {
     return { status: 'ok' };
   }
 
   @Get('ready')
-  ready() {
-    return { status: 'ok' };
+  async ready() {
+    const checks = this.readiness ? await this.readiness() : {};
+    if (Object.values(checks).some((ok) => !ok)) {
+      throw new ServiceUnavailableException({ status: 'unavailable', checks });
+    }
+    return { status: 'ready', checks };
   }
 }

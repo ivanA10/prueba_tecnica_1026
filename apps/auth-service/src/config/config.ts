@@ -16,6 +16,8 @@ export interface AuthConfig {
   serviceTokenTtl: number;
   cookieSecure: boolean;
   serviceClients: ServiceClient[];
+  /** Audiences a client_credentials token may target (internal services only). */
+  serviceAudiences: string[];
   retryDelaysMs: number[];
   maxRetries: number;
   publishRetries: number;
@@ -65,6 +67,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AuthConfig {
     serviceTokenTtl: int(env, 'SERVICE_TOKEN_TTL_SECONDS', 300),
     cookieSecure: (env.COOKIE_SECURE ?? 'true') !== 'false',
     serviceClients: clients,
+    serviceAudiences: (env.SERVICE_AUDIENCES || 'auth-service,role-service')
+      .split(',')
+      .map((s) => s.trim())
+      .filter((s) => s && s !== 'toka-api'),
     retryDelaysMs: (env.RETRY_DELAYS_MS ?? '5000,30000,120000').split(',').map((s) => Number(s.trim())),
     maxRetries: int(env, 'MAX_RETRIES', 3),
     publishRetries: int(env, 'PUBLISH_RETRIES', 3),

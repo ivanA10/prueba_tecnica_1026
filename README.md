@@ -115,12 +115,18 @@ Roles sembrados por `role-service`:
 
 ## Pruebas
 
-Unitarias e integracion (Jest, umbral de cobertura del 70% por servicio), sin levantar el stack:
+Unitarias e integracion (Jest, umbral global de 70% de lineas por paquete), sin levantar el stack:
 
 ```bash
 export PATH=~/corepack-bin:$PATH   # si corepack no esta en el PATH
-pnpm -r --filter "!@toka/e2e" test -- --coverage
+pnpm install --frozen-lockfile
+pnpm test:unit
 ```
+
+`test:unit` primero compila `packages/*` (las apps los consumen desde `dist/`) y genera los clientes
+Prisma de auth/role/user (`build:test-deps`); despues ejecuta Jest con cobertura en todos los paquetes
+salvo `e2e`. En un checkout limpio, ejecutar Jest directamente sin ese paso falla con
+`Cannot find module '@toka/jwt-guard/dist/index.js'`.
 
 Resumen de cobertura: [docs/coverage/README.md](docs/coverage/README.md).
 

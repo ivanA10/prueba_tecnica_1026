@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
-import { DLX_EXCHANGE, EVENTS_EXCHANGE, QueueBindings, RETRY_COUNT_HEADER } from '@toka/contracts';
+import { DLX_EXCHANGE, RETRY_COUNT_HEADER, declareEventTopology } from '@toka/contracts';
 import { AuditConfig } from './config';
 import { AuditProcessor } from './audit.processor';
 
@@ -95,12 +95,8 @@ export class AuditConsumer implements OnModuleInit, OnModuleDestroy {
   }
 
   async declareTopology(ch: AmqpChannelLike): Promise<void> {
-    await ch.assertExchange(EVENTS_EXCHANGE, 'topic', { durable: true });
-    await ch.assertExchange(DLX_EXCHANGE, 'direct', { durable: true });
-    await ch.assertQueue(QUEUE, {
-      durable: true,
-      arguments: { 'x-dead-letter-exchange': DLX_EXCHANGE, 'x-dead-letter-routing-key': DLQ },
-    });
+    // Exchanges + main queues/bindings shared with the publishers (identical queue arguments).
+    await declareEventTopology(ch);
     await ch.assertQueue(RETRY_QUEUE, {
       durable: true,
       arguments: {
@@ -110,7 +106,6 @@ export class AuditConsumer implements OnModuleInit, OnModuleDestroy {
       },
     });
     await ch.assertQueue(DLQ, { durable: true });
-    for (const key of QueueBindings['audit.events']) await ch.bindQueue(QUEUE, EVENTS_EXCHANGE, key);
     await ch.bindQueue(QUEUE, DLX_EXCHANGE, QUEUE);
     await ch.bindQueue(RETRY_QUEUE, DLX_EXCHANGE, RETRY_QUEUE);
     await ch.bindQueue(DLQ, DLX_EXCHANGE, DLQ);

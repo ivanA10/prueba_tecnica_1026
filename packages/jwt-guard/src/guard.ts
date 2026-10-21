@@ -78,7 +78,8 @@ export class JwtAuthGuard implements CanActivate {
 
     const roles = Array.isArray(payload.roles) ? (payload.roles as string[]) : [];
     const permissions = Array.isArray(payload.permissions) ? (payload.permissions as string[]) : [];
-    req.user = { sub, roles, permissions, jti, iat, exp, aud };
+    const scope = typeof payload.scope === 'string' ? payload.scope.split(' ').filter(Boolean) : [];
+    req.user = { sub, roles, permissions, scope, jti, iat, exp, aud };
     return true;
   }
 

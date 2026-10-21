@@ -1,6 +1,7 @@
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'crypto';
-import { Inject, Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, UnauthorizedException } from '@nestjs/common';
 import { createEnvelope, RoutingKeys } from '@toka/contracts';
+import { SERVICE_SCOPE } from '@toka/jwt-guard';
 import { getCorrelationId } from '@toka/logger';
 import type { AuthConfig } from '../config/config';
 import type { CredentialRecord } from '../domain/errors';
@@ -169,9 +170,12 @@ export class ServiceTokenService {
       .digest();
     const given = createHash('sha256').update(clientSecret).digest();
     if (!client || !timingSafeEqual(expected, given)) throw new UnauthorizedException('invalid_client');
+    // Only internal service audiences; never the user audience (a service token must not act as a user).
+    if (!this.config.serviceAudiences.includes(audience)) throw new BadRequestException('invalid_target');
     const signed = await this.issuer.sign({
       sub: clientId,
-      roles: ['service'],
+      roles: [],
+      scope: SERVICE_SCOPE,
       audience,
       ttlSeconds: this.config.serviceTokenTtl,
     });

@@ -8,7 +8,9 @@
   },
   "scripts": {
     "build": "pnpm -r build",
-    "test": "pnpm -r test -- --coverage",
+    "build:test-deps": "pnpm -r --filter \"./packages/*\" build && pnpm -r --filter @toka/auth-service --filter @toka/role-service --filter @toka/user-service prisma:generate",
+    "test:unit": "pnpm run build:test-deps && pnpm -r --filter \"!@toka/e2e\" test -- --coverage",
+    "test": "pnpm run test:unit",
     "lint": "pnpm -r lint",
     "format": "prettier --write \"packages/*/src/**/*.ts\" \"*.{js,mjs,json,yaml}\""
   },

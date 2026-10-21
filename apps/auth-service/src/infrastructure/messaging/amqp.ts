@@ -4,9 +4,9 @@ import {
   DLX_EXCHANGE,
   EVENTS_EXCHANGE,
   EventEnvelope,
-  QueueBindings,
   RETRY_COUNT_HEADER,
-  RoutingKeys,
+  UnroutableMessageError,
+  declareEventTopology,
 } from '@toka/contracts';
 import type { EventPublisher } from '../../application/ports';
 import type { MessageProcessor } from '../../application/projection-handler';
@@ -35,9 +35,16 @@ export class AmqpBroker implements EventPublisher {
   ) {}
 
   private processor?: MessageProcessor;
+  /** messageIds returned as unroutable (`mandatory`); the return frame always precedes the confirm. */
+  private readonly returned = new Set<string>();
 
   setProcessor(p: MessageProcessor): void {
     this.processor = p;
+  }
+
+  /** True once the topology is declared and the projection consumer is running. */
+  isReady(): boolean {
+    return this.channel !== undefined;
   }
 
   /** Non-blocking: keeps retrying in the background until the broker is available. */
@@ -55,11 +62,11 @@ export class AmqpBroker implements EventPublisher {
         this.scheduleReconnect();
       });
       const ch = await conn.createConfirmChannel();
-      await ch.assertExchange(EVENTS_EXCHANGE, 'topic', { durable: true });
-      await ch.assertExchange(DLX_EXCHANGE, 'direct', { durable: true });
-      await ch.assertQueue(PROJECTION_QUEUE, { durable: true });
-      const keys = new Set<string>([...QueueBindings[PROJECTION_QUEUE], RoutingKeys.RoleCreated]); // role.created carries permissions
-      for (const key of keys) await ch.bindQueue(PROJECTION_QUEUE, EVENTS_EXCHANGE, key);
+      ch.on('return', (msg: amqp.Message) => {
+        if (msg.properties.messageId) this.returned.add(msg.properties.messageId);
+      });
+      // Shared declaration (exchanges + every main queue and binding, incl. role.created for permissions).
+      await declareEventTopology(ch);
       await ch.bindQueue(PROJECTION_QUEUE, DLX_EXCHANGE, PROJECTION_QUEUE);
       await ch.assertQueue(RETRY_QUEUE, {
         durable: true,
@@ -125,11 +132,16 @@ export class AmqpBroker implements EventPublisher {
         Buffer.from(JSON.stringify(envelope)),
         {
           persistent: true,
+          mandatory: true,
           contentType: 'application/json',
           messageId: envelope.eventId,
           headers: { [CORRELATION_ID_HEADER]: envelope.correlationId },
         },
-        (err) => (err ? reject(err) : resolve()),
+        (err) => {
+          if (err) return reject(err);
+          if (this.returned.delete(envelope.eventId)) return reject(new UnroutableMessageError(envelope.type));
+          resolve();
+        },
       );
     });
   }

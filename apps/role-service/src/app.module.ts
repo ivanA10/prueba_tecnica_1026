@@ -10,11 +10,15 @@ import { RoleConfig, loadConfig } from './config/config';
 import { AmqpPublisher } from './infrastructure/messaging/amqp';
 import { PrismaRoleRepository } from './infrastructure/persistence/prisma-role-repository';
 import { RedisRoleCache } from './infrastructure/redis/redis-role-cache';
-import { HealthController, RolesController } from './interfaces/http/controllers';
+import { HealthController, READINESS, RolesController } from './interfaces/http/controllers';
 
 const PRISMA = 'PRISMA';
 const REDIS = 'REDIS';
 const BROKER = 'BROKER';
+
+/** Readiness probes must answer within the healthcheck timeout even if a dependency hangs. */
+const within = (p: Promise<boolean>, ms = 1500): Promise<boolean> =>
+  Promise.race([p, new Promise<boolean>((r) => setTimeout(() => r(false), ms).unref())]);
 
 type Log = { warn(o: Record<string, unknown>, m?: string): void; info(o: Record<string, unknown>, m?: string): void };
 
@@ -31,6 +35,10 @@ class Lifecycle implements OnApplicationBootstrap, OnModuleDestroy {
 
   async onApplicationBootstrap(): Promise<void> {
     this.broker.start();
+    // Seeds and re-sync publish role.* events: wait for the broker so they are not dropped at boot.
+    if (!(await this.broker.whenReady(30000))) {
+      this.logger.warn({ event: 'amqp.not_ready' }, 'broker not ready after 30s; seeding anyway (re-sync will retry)');
+    }
     await this.roles.seedAdmin(this.config.adminRoleId);
     await this.roles.seedExampleRoles(this.config.operadorRoleId, this.config.auditorRoleId);
     // Non-blocking re-sync: a broker outage only produces warnings.
@@ -81,6 +89,15 @@ class Lifecycle implements OnApplicationBootstrap, OnModuleDestroy {
       provide: TOKENS.Publisher,
       inject: [BROKER, TOKENS.Logger, TOKENS.Config],
       useFactory: (b: AmqpPublisher, log: Log, c: RoleConfig) => new ResilientEventPublisher(b, log, c.publishRetries),
+    },
+    {
+      provide: READINESS,
+      inject: [PRISMA, REDIS, BROKER],
+      useFactory: (prisma: PrismaClient, redis: Redis, broker: AmqpPublisher) => async () => ({
+        postgres: await within(prisma.$queryRaw`SELECT 1`.then(() => true, () => false)),
+        redis: await within(redis.ping().then((r) => r === 'PONG', () => false)),
+        rabbitmq: broker.isReady(),
+      }),
     },
     {
       provide: JWT_GUARD_OPTIONS,

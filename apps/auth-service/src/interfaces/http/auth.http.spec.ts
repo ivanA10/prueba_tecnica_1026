@@ -25,7 +25,7 @@ import {
   JwksController,
   OAuthController,
 } from './controllers';
-import { RolesGuard } from './roles.guard';
+import { ServiceTokenGuard } from './service-token.guard';
 
 /** Test guard: authenticates from the `x-user` header (JSON `{sub,roles,jti,exp}`). */
 @Injectable()
@@ -88,7 +88,7 @@ describe('auth-service HTTP', () => {
         AuthService,
         ServiceTokenService,
         CredentialsService,
-        RolesGuard,
+        ServiceTokenGuard,
       ],
     })
       .overrideGuard(JwtAuthGuard)
@@ -173,8 +173,16 @@ describe('auth-service HTTP', () => {
       .send({ grant_type: 'client_credentials', client_id: 'user-service', client_secret: 's3cret', audience: 'role-service' });
     expect(ok.status).toBe(200);
     const { payload } = verifyRs256(ok.body.access_token, jwks());
-    expect(payload).toMatchObject({ aud: 'role-service', roles: ['service'], sub: 'user-service' });
+    expect(payload).toMatchObject({ aud: 'role-service', scope: 'svc:internal', roles: [], sub: 'user-service' });
     expect(payload.permissions).toBeUndefined();
+
+    // A service token can never be minted for the user audience (or any non-internal one).
+    for (const audience of ['toka-api', 'evil']) {
+      const target = await request(app.getHttpServer())
+        .post('/oauth/token')
+        .send({ grant_type: 'client_credentials', client_id: 'user-service', client_secret: 's3cret', audience });
+      expect(target.status).toBe(400);
+    }
 
     const bad = await request(app.getHttpServer())
       .post('/oauth/token')
@@ -186,16 +194,30 @@ describe('auth-service HTTP', () => {
     expect(grant.status).toBe(400);
   });
 
-  it('internal credentials: 403 without service role; PUT is idempotent (201 then 200); 409 on foreign email; DELETE revokes', async () => {
-    const svc = JSON.stringify({ sub: 'user-service', roles: ['service'], jti: 'j', exp: 9999999999 });
+  it('internal credentials: 403 without service scope; PUT is idempotent (201 then 200); 409 on foreign email; DELETE revokes', async () => {
+    const svc = JSON.stringify({ sub: 'user-service', roles: [], scope: ['svc:internal'], aud: 'auth-service', jti: 'j', exp: 9999999999 });
     const newId = '33333333-3333-4333-8333-333333333333';
     const body = { email: 'n@b.com', password: 'longpassword', roleId: ROLE_ID, roleName: 'admin', roleVersion: 1, rolePermissions: ['*'] };
 
     const forbidden = await request(app.getHttpServer())
       .put(`/internal/credentials/${newId}`)
-      .set('x-user', JSON.stringify({ sub: 'u', roles: ['admin'], jti: 'j', exp: 1 }))
+      .set('x-user', JSON.stringify({ sub: 'u', roles: ['admin'], aud: 'toka-api', jti: 'j', exp: 1 }))
       .send(body);
     expect(forbidden.status).toBe(403);
+
+    // Regression: a user whose role is *named* "service" is still a user token.
+    const roleNamedService = await request(app.getHttpServer())
+      .put(`/internal/credentials/${USER_ID}`)
+      .set('x-user', JSON.stringify({ sub: 'u', roles: ['service'], scope: [], aud: 'toka-api', jti: 'j', exp: 1 }))
+      .send({ ...body, email: 'a@b.com' });
+    expect(roleNamedService.status).toBe(403);
+
+    // A service token minted for another service's audience is not accepted here.
+    const otherAud = await request(app.getHttpServer())
+      .put(`/internal/credentials/${newId}`)
+      .set('x-user', JSON.stringify({ sub: 'user-service', scope: ['svc:internal'], aud: 'role-service', jti: 'j', exp: 1 }))
+      .send(body);
+    expect(otherAud.status).toBe(403);
 
     const created = await request(app.getHttpServer()).put(`/internal/credentials/${newId}`).set('x-user', svc).send(body);
     expect(created.status).toBe(201);

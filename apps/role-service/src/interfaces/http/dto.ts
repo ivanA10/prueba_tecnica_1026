@@ -11,10 +11,24 @@ class KnownPermissions implements ValidatorConstraintInterface {
   }
 }
 
+/** Names that look like system identities; never valid for a user-assignable role. */
+export const RESERVED_ROLE_NAMES = ['service', 'system'];
+
+@ValidatorConstraint({ name: 'notReservedRoleName', async: false })
+class NotReservedRoleName implements ValidatorConstraintInterface {
+  validate(value: unknown): boolean {
+    return typeof value === 'string' && !RESERVED_ROLE_NAMES.includes(value.trim().toLowerCase());
+  }
+  defaultMessage(args: ValidationArguments): string {
+    return `${args.property} is reserved (${RESERVED_ROLE_NAMES.join(', ')})`;
+  }
+}
+
 export class RoleBodyDto {
   @IsString()
   @MinLength(1)
   @MaxLength(100)
+  @Validate(NotReservedRoleName)
   name!: string;
 
   @IsOptional()

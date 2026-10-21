@@ -30,9 +30,14 @@ describe('PermissionsGuard', () => {
     );
   });
 
-  it('service token only passes on AllowServiceToken routes', () => {
-    const user = { roles: ['service'], permissions: [] };
+  it('service token (scope svc:internal) only passes on AllowServiceToken routes', () => {
+    const user = { roles: [], permissions: [], scope: ['svc:internal'] };
     expect(guard.canActivate(ctx('svc', user))).toBe(true);
     expect(() => guard.canActivate(ctx('both', user))).toThrow(ForbiddenException);
+  });
+
+  it('a user token whose role is named "service" is NOT a service token', () => {
+    const user = { roles: ['service'], permissions: [], scope: [] };
+    expect(() => guard.canActivate(ctx('svc', user))).toThrow(ForbiddenException);
   });
 });
