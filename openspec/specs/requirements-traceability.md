@@ -43,3 +43,19 @@ La matriz SHALL incluir una sección `## Cambios planeados` con los 9 cambios en
 #### Scenario: Nombres de cambio consistentes
 - **WHEN** se buscan los 9 nombres en el documento
 - **THEN** todos aparecen al menos una vez
+
+### Requirement: Estados finales verificados contra el disco
+> Incorporado desde el cambio archivado `document-diagnosis-delivery` (`openspec/changes/archive/2026-10-21-document-diagnosis-delivery/specs/requirements-traceability.md`), con el estado `Parcial` añadido en la actualización as-built.
+
+La columna Estado de `docs/traceability.md` SHALL usar: `Implementado` (código o configuración existente en disco), `Entregado` (documento o artefacto generado existente), `Parcial` (existe parte del artefacto; la fila indica qué existe y el siguiente paso) o `Planeado` solo si la ruta del artefacto no existe (con nota en la fila). La columna Artefacto SHALL citar rutas existentes en disco. Ninguna fila de EX4 ni `EX2-R18`, `EX2-R19`, `EX2-R20`, `EX3-R19`, `EX5-R17`, `EX0-R07`, `EX0-R08`, `EX0-R16` SHALL quedar `Planeado`.
+
+#### Scenario: Ex4 entregado
+- **WHEN** se listan las filas `| EX4-`
+- **THEN** ninguna contiene `Planeado`
+
+### Requirement: Sección de estado final de entrega
+La matriz SHALL incluir `## Estado final de entrega` con el conteo de filas por estado y la lista de filas `Parcial` (o `Planeado`) con lo que existe y el siguiente paso, y SHALL citar `docs/coverage/README.md` en las filas de cobertura.
+
+#### Scenario: Sección presente
+- **WHEN** se busca el encabezado `## Estado final de entrega`
+- **THEN** existe y contiene una tabla de conteos

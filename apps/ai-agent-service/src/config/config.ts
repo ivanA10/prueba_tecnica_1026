@@ -19,7 +19,6 @@ export interface AgentConfig {
   userToolTimeoutMs: number;
   rlMax: number;
   rlWindowS: number;
-  adminRole: string;
   seedOnStart: boolean;
   chunkMaxTokens: number;
   chunkOverlapTokens: number;
@@ -74,7 +73,6 @@ export function loadConfig(env: Env = process.env): AgentConfig {
     userToolTimeoutMs: num(env, 'USER_TOOL_TIMEOUT_MS', 3000),
     rlMax: num(env, 'AGENT_RL_MAX', 20),
     rlWindowS: num(env, 'AGENT_RL_WINDOW_S', 60),
-    adminRole: env.AGENT_ADMIN_ROLE?.trim() || 'admin',
     seedOnStart: (env.AGENT_SEED_ON_START ?? 'true').toLowerCase() !== 'false',
     chunkMaxTokens: num(env, 'CHUNK_MAX_TOKENS', 256),
     chunkOverlapTokens: num(env, 'CHUNK_OVERLAP_TOKENS', 32),

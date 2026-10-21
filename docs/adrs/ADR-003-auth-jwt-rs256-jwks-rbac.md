@@ -3,6 +3,7 @@ id: ADR-003
 title: Autenticación JWT RS256 con JWKS, RBAC por rol y refresh en cookie HttpOnly
 status: accepted
 date: 2026-10-20
+amended: 2026-10-21 (Evolución: autorización por permisos)
 tier: 0
 tags: [adr, tier-0]
 ---
@@ -106,3 +107,27 @@ Rechazar toda petición si no se puede consultar el denylist. Por qué se descar
 - **Implementado en `build-auth-role-services`**: emisión RS256 con `kid` y `aud`, JWKS con una sola clave, `/oauth/token` (`client_credentials`) solo interno, argon2id, `user_roles_projection` y `role_names_projection` (versión por agregado), denylist por `jti` y por usuario, refresh con rotación en cookie HttpOnly y `POST /auth/refresh`, política de `jwt-guard` (fail-open solo en el denylist con log `warn` y métrica).
 - **Implementado en `bootstrap-monorepo-platform`**: script de generación de la clave RSA y montaje del secreto.
 - **Evolución** (no implementado, riesgo aceptado): rotación de claves con JWKS actual + previa; discovery `/.well-known/openid-configuration`; claim `permissions[]`; migración a un proveedor OIDC completo como Keycloak.
+
+## Evolución: autorización por permisos
+
+**Fecha**: 2026-10-21. **Estado**: Accepted (enmienda a esta ADR). El texto original se conserva arriba; esta sección prevalece sobre "Autorización: RBAC por rol" y sobre el punto `permissions[]` de la lista de Evolución de "Implementación", que queda implementado.
+
+### Motivación
+
+- Con RBAC por nombre de rol, los permisos definidos en role-service eran informativos: editar los permisos de un rol no cambiaba lo que sus usuarios podían hacer, y un rol nuevo creado desde la UI no tenía efecto en la autorización.
+- Los nombres de rol son editables; acoplar la autorización a ellos hacía frágil cada comprobación.
+- La UI necesitaba saber qué acciones mostrar sin replicar la tabla rol → capacidades.
+
+### Decisión
+
+- **Catálogo de permisos** en `packages/contracts/src/permissions.ts`: `users:read`, `users:write`, `roles:read`, `roles:write`, `audit:read`, `agent:ask`, `agent:ingest`, más el comodín `*` (todos los permisos). Roles sembrados: `admin` (`*`), `operador` (`users:read`, `roles:read`, `audit:read`, `agent:ask`) y `auditor` (`audit:read`).
+- **Claim `permissions`** en el access token. auth-service lo resuelve al emitir desde `role_names_projection`, que ahora guarda también `permissions` y se mantiene con `role.created`/`role.updated` (misma regla de versión por agregado descrita en "Origen del rol"). El claim `roles` se mantiene (lo usan el filtro `roleScope` del agente y el `actor` de los eventos de dominio).
+- **`PermissionsGuard` + `@RequirePermissions(...)`** en `packages/jwt-guard`, encadenado tras `JwtAuthGuard`. Cada servicio declara y aplica sus propios permisos por endpoint (user, role, audit y ai-agent-service); la decisión sigue siendo local, sin consultar role-service por petición.
+- **Tokens de servicio**: los tokens `client_credentials` llevan `roles: ['service']` y no tienen permisos de usuario. Un endpoint que deba aceptarlos lo declara explícitamente con `@AllowServiceToken()` (p. ej. `GET /roles/:id`, que user-service consulta durante el alta). Los endpoints internos de auth-service siguen protegidos por rol `service`.
+- **Web**: el hook `useCan(permiso)` decide navegación, tarjetas de Inicio y acciones visibles; la página Permisos muestra la matriz rol × permiso. La UI solo oculta; la autorización efectiva la aplica cada servicio.
+- El agente expone la herramienta `lookup_users` al LLM solo si el llamante tiene `users:read`.
+
+### Consecuencias
+
+- **Positivas**: los roles creados o editados desde la UI tienen efecto real; autorización granular y declarativa por endpoint; el nombre del rol deja de ser relevante para la seguridad; UI y backend comparten un único catálogo.
+- **Negativas y riesgos**: los permisos del token pueden quedar desfasados hasta que expire el access token o llegue el evento de proyección (misma consistencia eventual que el rol); el tamaño del token crece con el número de permisos; `*` concede también permisos futuros, por lo que solo se asigna a `admin`; no existe borrado de roles (requeriría reasignar usuarios), por diseño en este alcance.
