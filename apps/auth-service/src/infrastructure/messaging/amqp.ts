@@ -99,9 +99,10 @@ export class AmqpBroker implements EventPublisher {
       if (!this.processor) throw new Error('processor not set');
       const action = await this.processor.process(msg.content.toString('utf8'), retryCount);
       const headers = { ...msg.properties.headers };
+      // Ack the original only after the broker confirms the republish; any failure falls to nack+requeue.
       if (action.kind === 'retry') {
         headers[RETRY_COUNT_HEADER] = action.retryCount;
-        ch.sendToQueue(RETRY_QUEUE, msg.content, {
+        await this.sendConfirmed(ch, RETRY_QUEUE, msg.content, {
           persistent: true,
           contentType: 'application/json',
           headers,
@@ -109,7 +110,7 @@ export class AmqpBroker implements EventPublisher {
         });
       } else if (action.kind === 'dlq') {
         this.logger.warn({ event: 'amqp.dlq', reason: action.reason }, 'message sent to DLQ');
-        ch.sendToQueue(DLQ, msg.content, {
+        await this.sendConfirmed(ch, DLQ, msg.content, {
           persistent: true,
           contentType: 'application/json',
           headers: { ...headers, 'x-death-reason': action.reason },
@@ -120,6 +121,17 @@ export class AmqpBroker implements EventPublisher {
       this.logger.warn({ event: 'amqp.consume_error', error: String(err) }, 'consumer failure, requeueing');
       ch.nack(msg, false, true);
     }
+  }
+
+  private sendConfirmed(
+    ch: amqp.ConfirmChannel,
+    queue: string,
+    content: Buffer,
+    opts: amqp.Options.Publish,
+  ): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+      ch.sendToQueue(queue, content, opts, (err) => (err ? reject(err) : resolve()));
+    });
   }
 
   async publish(envelope: EventEnvelope<unknown>): Promise<void> {

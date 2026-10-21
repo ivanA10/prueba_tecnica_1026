@@ -21,12 +21,13 @@ export interface AmqpChannelLike {
   bindQueue(queue: string, exchange: string, key: string): Promise<unknown>;
   prefetch(n: number): Promise<unknown> | unknown;
   consume(queue: string, cb: (msg: AmqpMessage | null) => void): Promise<unknown>;
-  publish(exchange: string, key: string, content: Buffer, opts: object): boolean;
+  publish(exchange: string, key: string, content: Buffer, opts: object, cb: (err: unknown) => void): boolean;
   ack(msg: AmqpMessage): void;
+  nack(msg: AmqpMessage, allUpTo?: boolean, requeue?: boolean): void;
   close(): Promise<void>;
 }
 export interface AmqpConnectionLike {
-  createChannel(): Promise<AmqpChannelLike>;
+  createConfirmChannel(): Promise<AmqpChannelLike>;
   close(): Promise<void>;
   on(event: string, cb: (...args: unknown[]) => void): unknown;
 }
@@ -66,7 +67,7 @@ export class AuditConsumer implements OnModuleInit, OnModuleDestroy {
       const conn = await this.connect(this.config.rabbitmqUrl);
       conn.on('error', () => undefined);
       conn.on('close', () => this.onClosed());
-      const ch = await conn.createChannel();
+      const ch = await conn.createConfirmChannel();
       await this.declareTopology(ch);
       await ch.prefetch(this.config.prefetch);
       await ch.consume(QUEUE, (msg) => {
@@ -111,23 +112,36 @@ export class AuditConsumer implements OnModuleInit, OnModuleDestroy {
     await ch.bindQueue(DLQ, DLX_EXCHANGE, DLQ);
   }
 
+  /** Publishes on the confirm channel and resolves only once the broker has confirmed the message. */
+  private publishConfirmed(ch: AmqpChannelLike, key: string, content: Buffer, opts: object): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+      ch.publish(DLX_EXCHANGE, key, content, opts, (err) => (err ? reject(err) : resolve()));
+    });
+  }
+
+  /** Ack only after the retry/DLQ republish is confirmed; on any failure nack with requeue (no loss). */
   async handle(ch: AmqpChannelLike, msg: AmqpMessage): Promise<void> {
-    const headers = { ...(msg.properties.headers ?? {}) };
-    const retryCount = Number(headers[RETRY_COUNT_HEADER] ?? 0) || 0;
-    const outcome = await this.processor.process(msg.content, retryCount);
-    const opts = { persistent: true, contentType: 'application/json' };
-    if (outcome.action === 'retry') {
-      ch.publish(DLX_EXCHANGE, RETRY_QUEUE, msg.content, {
-        ...opts,
-        headers: { ...headers, [RETRY_COUNT_HEADER]: retryCount + 1 },
-      });
-    } else if (outcome.action === 'dlq') {
-      this.log.error(`message to DLQ (${outcome.error}) messageId=${msg.properties.messageId ?? 'n/a'}`);
-      ch.publish(DLX_EXCHANGE, DLQ, msg.content, {
-        ...opts,
-        headers: { ...headers, 'x-error': outcome.error, 'x-failed-at': new Date().toISOString() },
-      });
+    try {
+      const headers = { ...(msg.properties.headers ?? {}) };
+      const retryCount = Number(headers[RETRY_COUNT_HEADER] ?? 0) || 0;
+      const outcome = await this.processor.process(msg.content, retryCount);
+      const opts = { persistent: true, contentType: 'application/json' };
+      if (outcome.action === 'retry') {
+        await this.publishConfirmed(ch, RETRY_QUEUE, msg.content, {
+          ...opts,
+          headers: { ...headers, [RETRY_COUNT_HEADER]: retryCount + 1 },
+        });
+      } else if (outcome.action === 'dlq') {
+        this.log.error(`message to DLQ (${outcome.error}) messageId=${msg.properties.messageId ?? 'n/a'}`);
+        await this.publishConfirmed(ch, DLQ, msg.content, {
+          ...opts,
+          headers: { ...headers, 'x-error': outcome.error, 'x-failed-at': new Date().toISOString() },
+        });
+      }
+      ch.ack(msg);
+    } catch (err) {
+      this.log.warn(`consumer failure, requeueing: ${(err as Error).message}`);
+      ch.nack(msg, false, true);
     }
-    ch.ack(msg);
   }
 }

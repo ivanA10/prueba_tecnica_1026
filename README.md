@@ -178,6 +178,7 @@ El servicio tiene salida a internet solo a traves de la red `egress`.
 - Validacion del agente contra la API de Anthropic en vivo (`EVAL_PROVIDER=anthropic`).
 - Pipeline de CI (lint, tests con cobertura, build de imagenes y e2e).
 - Borrado de roles con reasignacion de los usuarios afectados.
+- Outbox transaccional en auth-service y role-service (hoy publican directo y pierden eventos si el broker cae; mitigado por el resync de roles al arrancar), como el de user-service.
 
 ## Documentacion
 

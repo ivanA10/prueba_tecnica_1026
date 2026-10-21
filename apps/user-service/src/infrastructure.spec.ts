@@ -98,8 +98,8 @@ describe('OutboxPublisher', () => {
   function setup(rows: unknown[]) {
     const tx = { $queryRaw: jest.fn().mockResolvedValue(rows), outboxEvent: { update: jest.fn() } };
     const prisma = { $transaction: jest.fn(async (fn: (t: typeof tx) => unknown) => fn(tx)) };
-    const publisher = { publish: jest.fn().mockResolvedValue(undefined), isReady: jest.fn() };
-    const pub = new OutboxPublisher(prisma as never, publisher, { outboxBatch: 10, outboxPollMs: 1000 });
+    const publisher = { publish: jest.fn().mockResolvedValue(undefined), isReady: jest.fn().mockResolvedValue(true) };
+    const pub = new OutboxPublisher(prisma as never, publisher, { outboxBatch: 10, outboxPollMs: 1000, outboxMaxAttempts: 3 });
     return { tx, publisher, pub };
   }
 
@@ -113,15 +113,41 @@ describe('OutboxPublisher', () => {
     expect(tx.outboxEvent.update.mock.calls[0][0].data.publishedAt).toBeInstanceOf(Date);
   });
 
-  it('broker failure leaves the row pending (attempts++) and stops the batch', async () => {
+  it('broker down stops the batch without counting attempts', async () => {
     const { tx, publisher, pub } = setup([
-      { seq: 1n, type: 'user.created', envelope: env(1) },
-      { seq: 2n, type: 'user.updated', envelope: env(2) },
+      { seq: 1n, aggregateId: 'a', attempts: 0, type: 'user.created', envelope: env(1) },
+      { seq: 2n, aggregateId: 'b', attempts: 0, type: 'user.updated', envelope: env(2) },
     ]);
     publisher.publish.mockRejectedValueOnce(new Error('broker down'));
+    publisher.isReady.mockResolvedValueOnce(false);
     expect(await pub.flush()).toBe(0);
     expect(publisher.publish).toHaveBeenCalledTimes(1);
+    expect(tx.outboxEvent.update).not.toHaveBeenCalled();
+  });
+
+  it('poison row: counted, then marked dead at max attempts; other rows still publish, same aggregate is held back', async () => {
+    const { tx, publisher, pub } = setup([
+      { seq: 1n, eventId: 'e1', aggregateId: 'a', attempts: 1, type: 'user.created', envelope: env(1) },
+      { seq: 2n, eventId: 'e2', aggregateId: 'a', attempts: 0, type: 'user.updated', envelope: env(2) },
+      { seq: 3n, eventId: 'e3', aggregateId: 'b', attempts: 0, type: 'user.created', envelope: env(1) },
+    ]);
+    publisher.publish.mockRejectedValueOnce(new Error('poison'));
+    // attempts 1 -> 2 (< 3): counted, aggregate a held back, aggregate b published
+    expect(await pub.flush()).toBe(1);
     expect(tx.outboxEvent.update).toHaveBeenCalledWith({ where: { seq: 1n }, data: { attempts: { increment: 1 } } });
+    expect(publisher.publish).toHaveBeenCalledTimes(2);
+    // attempts 2 -> 3 (>= max): dead, and the next row of the aggregate publishes
+    tx.outboxEvent.update.mockClear();
+    publisher.publish.mockRejectedValueOnce(new Error('poison'));
+    tx.$queryRaw.mockResolvedValue([
+      { seq: 1n, eventId: 'e1', aggregateId: 'a', attempts: 2, type: 'user.created', envelope: env(1) },
+      { seq: 2n, eventId: 'e2', aggregateId: 'a', attempts: 0, type: 'user.updated', envelope: env(2) },
+    ]);
+    expect(await pub.flush()).toBe(1);
+    expect(tx.outboxEvent.update.mock.calls[0][0]).toMatchObject({
+      where: { seq: 1n },
+      data: { failedAt: expect.any(Date) },
+    });
   });
 });
 
