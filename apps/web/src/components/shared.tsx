@@ -1,9 +1,21 @@
-import { useEffect } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import { dismiss } from '@/store/notifications';
 
-export function Spinner({ label = 'Cargando...' }: { label?: string }) {
-  return <p role="status">{label}</p>;
+export function Spinner({ label = 'Cargando…' }: { label?: string }) {
+  return (
+    <p role="status" className="spinner">
+      {label}
+    </p>
+  );
+}
+
+export function PageTitle({ children }: { children: ReactNode }) {
+  return (
+    <div className="page-title">
+      <h1>{children}</h1>
+    </div>
+  );
 }
 
 export function errorText(error: unknown): string {
@@ -11,9 +23,9 @@ export function errorText(error: unknown): string {
   const m = e?.data?.message;
   if (Array.isArray(m)) return m.join(', ');
   if (typeof m === 'string') return m;
-  if (e?.status === 403) return 'No tienes permisos para esta accion (403).';
+  if (e?.status === 403) return 'No tienes permisos para esta acción (403).';
   if (e?.status === 429) return 'Demasiados intentos, espera un momento (429).';
-  return 'Ha ocurrido un error. Intentalo de nuevo.';
+  return 'Ha ocurrido un error. Inténtalo de nuevo.';
 }
 
 export function ErrorMessage({ error }: { error: unknown }) {
@@ -35,9 +47,9 @@ export function Toaster() {
     <div className="toasts" aria-live="polite">
       {items.map((n) => (
         <div key={n.id} className={`toast ${n.kind}`} role={n.kind === 'error' ? 'alert' : 'status'}>
-          {n.message}{' '}
-          <button type="button" aria-label="Cerrar" onClick={() => dispatch(dismiss(n.id))}>
-            x
+          <span>{n.message}</span>
+          <button type="button" className="btn btn-ghost" aria-label="Cerrar" onClick={() => dispatch(dismiss(n.id))}>
+            ×
           </button>
         </div>
       ))}
@@ -47,15 +59,18 @@ export function Toaster() {
 
 export function ConfirmDialog(props: { message: string; onConfirm: () => void; onCancel: () => void }) {
   return (
-    <div className="dialog">
-      <div role="dialog" aria-modal="true" aria-label="Confirmacion">
-        <p>{props.message}</p>
-        <button type="button" onClick={props.onConfirm}>
-          Confirmar
-        </button>
-        <button type="button" onClick={props.onCancel}>
-          Cancelar
-        </button>
+    <div className="dialog-backdrop">
+      <div className="dialog" role="dialog" aria-modal="true" aria-label="Confirmación">
+        <div className="dialog-title">Confirmación</div>
+        <p className="dialog-body">{props.message}</p>
+        <div className="dialog-actions">
+          <button type="button" className="btn btn-secondary" onClick={props.onCancel}>
+            Cancelar
+          </button>
+          <button type="button" className="btn btn-primary" onClick={props.onConfirm}>
+            Confirmar
+          </button>
+        </div>
       </div>
     </div>
   );

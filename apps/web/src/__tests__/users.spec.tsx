@@ -44,7 +44,7 @@ describe('users', () => {
     renderApp(ui);
     expect(screen.getByRole('status')).toBeInTheDocument();
     expect(await screen.findByText('ana@x.com')).toBeInTheDocument();
-    expect(screen.getByText('ACTIVE')).toBeInTheDocument();
+    expect(screen.getByText('Activo')).toBeInTheDocument();
   });
 
   it('shows the list error', async () => {
@@ -57,25 +57,35 @@ describe('users', () => {
     server(({ url }) => (url.startsWith('/roles') ? { status: 403, body: {} } : undefined));
     renderApp(ui, { admin: false });
     expect(await screen.findByText('r2')).toBeInTheDocument();
-    expect(screen.queryByText('Nuevo usuario')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Nuevo usuario/ })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Editar Ana')).not.toBeInTheDocument();
   });
 
   it('validates the create form without POST, then creates with toast', async () => {
     const f = server();
     renderApp(ui);
     await screen.findByText('ana@x.com');
+    fireEvent.click(screen.getByRole('button', { name: /Nuevo usuario/ }));
     const form = screen.getByRole('form', { name: 'Nuevo usuario' });
-    fireEvent.click(within(form).getByRole('button', { name: 'Crear' }));
+    fireEvent.click(within(form).getByRole('button', { name: 'Crear usuario' }));
     expect(await screen.findByText('El nombre es obligatorio')).toBeInTheDocument();
     expect(f.mock.calls.some((c) => (c[0] as Request).method === 'POST')).toBe(false);
 
     fireEvent.change(within(form).getByLabelText('Nombre'), { target: { value: 'Bob' } });
     fireEvent.change(within(form).getByLabelText('Email'), { target: { value: 'b@x.com' } });
-    fireEvent.change(within(form).getByLabelText('Contrasena'), { target: { value: '12345678' } });
+    fireEvent.change(within(form).getByLabelText('Contraseña'), { target: { value: '12345678' } });
     fireEvent.change(within(form).getByLabelText('Rol'), { target: { value: 'r1' } });
-    fireEvent.click(within(form).getByRole('button', { name: 'Crear' }));
+    fireEvent.click(within(form).getByRole('button', { name: 'Crear usuario' }));
     expect(await screen.findByText(/Usuario creado/)).toBeInTheDocument();
     expect(await screen.findByText('b@x.com')).toBeInTheDocument();
+  });
+
+  it('filters the current page by name or email', async () => {
+    server();
+    renderApp(ui);
+    await screen.findByText('ana@x.com');
+    fireEvent.change(screen.getByLabelText('Buscar usuarios'), { target: { value: 'zzz' } });
+    expect(screen.getByText('Ningún usuario coincide con la búsqueda.')).toBeInTheDocument();
   });
 
   it('deletes after confirmation', async () => {
@@ -98,7 +108,7 @@ describe('users', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Editar Ana' }));
     const form = screen.getByRole('form', { name: 'Editar usuario' });
     fireEvent.change(within(form).getByLabelText('Nombre'), { target: { value: 'Ana B' } });
-    fireEvent.click(within(form).getByRole('button', { name: 'Guardar' }));
+    fireEvent.click(within(form).getByRole('button', { name: 'Guardar cambios' }));
     expect(await screen.findByText(/Usuario actualizado/)).toBeInTheDocument();
   });
 });
