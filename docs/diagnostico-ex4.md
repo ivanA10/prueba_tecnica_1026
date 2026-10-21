@@ -25,10 +25,10 @@ Criterio de priorización: **probabilidad × impacto ÷ costo de verificar**. Se
 | H3 | Comunicación entre servicios | role-service o auth-service lento con circuit breaker abierto; el alta se compensa (`POST /users` responde 503, usuarios `PENDING`) | 1, 2 | 503 en alta, usuarios en `PENDING`, logs de breaker abierto | `jq 'select(.service=="user-service" and .statusCode>=500)'`; contar usuarios `PENDING` | P1 |
 | H4 | Comunicación entre servicios | Tormenta de reintentos user→auth que amplifica una degradación leve | 1, 2, 3 | Picos de tráfico entre servicios sin aumento de usuarios, `latencyMs` en escalera | Contar requests por `correlationId` repetido hacia auth; revisar backoff/jitter | P2 |
 | H5 | Red | DNS, red de Docker o nginx (502/504, `proxy_read_timeout` por debajo del presupuesto) | 2, 3 | 502/504 en nginx sin log correspondiente en el servicio | `docker network inspect`; `curl` a `/health` directo vs. por nginx; log de nginx | P2 |
-| H6 | Comunicación entre servicios (mensajería) | RabbitMQ caído o saturado (outbox crece, credenciales `PENDING`, DLQ con mensajes) | 1 | Tabla `outbox_events` crece; cola sin consumidores | Consola `15672`: colas y DLQ; `select count(*) from outbox_events where published_at is null` | P2 |
+| H6 | Comunicación entre servicios (mensajería) | RabbitMQ caído o saturado (outbox crece, credenciales `PENDING`, DLQ con mensajes) | 1 | Tabla `outbox_events` crece; cola sin consumidores | `docker compose exec rabbitmq rabbitmqctl list_queues name messages consumers` (colas y DLQ); `select count(*) from outbox_events where published_at is null` | P2 |
 | H7 | Base de datos | MongoDB caído (audit devuelve 503, `event=audit.fallback`) | 2 | Eventos `audit.fallback` en logs | `jq 'select(.event=="audit.fallback")'`; `mongosh --eval "db.runCommand({ping:1})"` | P3 |
 | H8 | Configuración/infra | Redis degradado (denylist fail-open con `warn`, rate limit por usuario no aplicado o rechazando) | 2, 3 | Logs `warn` de denylist; 429 inesperados | `redis-cli ping`; `jq 'select(.level=="warn")'` | P3 |
-| H9 | Agentes IA | Proveedor LLM lento o devolviendo 429 | 3 | `latencyMs` del agente cerca de 20 s; 429 con `retry-after` | `jq 'select(.service=="agent-service") \| .latencyMs'`; revisar `statusCode==429` | P1 |
+| H9 | Agentes IA | Proveedor LLM lento o devolviendo 429 | 3 | `latencyMs` del agente cerca de 20 s; 429 con `retry-after` | `jq 'select(.service=="ai-agent-service") \| .latencyMs'`; revisar `statusCode==429` | P1 |
 | H10 | Agentes IA | Qdrant o embeddings saturados | 3 | Latencia alta antes de la llamada al LLM | Medir etapas por `correlationId`; `curl` al `/health` de Qdrant | P2 |
 | H11 | Agentes IA | Tokens por consulta inflados (`ragHits` alto, prompt largo) que suben latencia y costo | 3 | `llm.tokensIn` p95 por encima de lo habitual | Agregado de `llm.tokensIn` por hora (ver Logs centralizados) | P3 |
 
@@ -42,7 +42,7 @@ Si los tres síntomas aparecen al mismo tiempo, las candidatas son H1 (cambio de
 |---|---|---|
 | 0. Triage y contención (minutos) | Confirmar impacto, nombrar responsable de incidente, congelar despliegues, abrir canal | Impacto y alcance inicial documentados |
 | 1. Alcance y qué cambió | Línea de tiempo: último despliegue, cambios de config/secretos, rotación de `kid` | Hay (o se descarta) un cambio correlacionado con el inicio |
-| 2. Verificación barata y amplia | `docker compose ps`; `GET /health` y `GET /ready` por servicio | Se sabe qué servicios y dependencias están caídos o no listos |
+| 2. Verificación barata y amplia | `docker compose ps` (healthchecks de servicios e infraestructura); `GET /health` por servicio; `GET /ready` en user-service y audit-service, que sí comprueban dependencias; para auth-service, role-service y ai-agent-service, comandos directos sobre sus dependencias (ver `## Herramientas de debugging`) | Se sabe qué servicios y dependencias están caídos o no listos |
 | 3. Correlación por `correlationId` | Seguir una petición fallida y una lenta de extremo a extremo | Se identifica el primer servicio donde aparece el error o la latencia |
 | 4. Profundización por categoría | BD, mensajería, red o IA según la fase 3 | Hipótesis confirmada con evidencia (log, métrica, comando) |
 | 5. Mitigación y verificación | Aplicar la acción menos riesgosa y verificar con tráfico real | Tasa de 5xx y latencia vuelven a la línea base durante un tiempo acordado |
@@ -51,10 +51,10 @@ Matriz síntoma → comando:
 
 | Síntoma | Primer comando |
 |---|---|
-| No guarda registros | `curl -s localhost:<puerto>/ready` de user-service; `docker compose logs user-service \| jq 'select(.statusCode>=500)'` |
+| No guarda registros | `docker compose exec user-service node -e "fetch('http://127.0.0.1:3002/ready').then(r=>r.text()).then(console.log)"`; `docker compose logs user-service \| jq 'select(.statusCode>=500)'` |
 | 500 en algún servicio | `docker compose ps`; agregado de `statusCode >= 500` por `service` |
 | Alta latencia del agente | `jq` sobre `latencyMs` y `llm.tokensIn` del agente; estado de Qdrant y proveedor |
-| 502/504 | `docker compose logs nginx --tail 200`; `curl` directo al servicio |
+| 502/504 | `docker compose logs web --tail 200`; `curl` directo al servicio |
 
 ## Logs centralizados
 
@@ -64,7 +64,7 @@ Recetas con `jq` sobre `docker compose logs` (el `correlationId` viaja en todos 
 
 ```bash
 # Seguir una petición de extremo a extremo
-docker compose logs --no-log-prefix user-service role-service auth-service agent-service \
+docker compose logs --no-log-prefix user-service role-service auth-service ai-agent-service \
   | jq -c 'select(.correlationId=="<id>")' | jq -s 'sort_by(.timestamp)'
 
 # 5xx por servicio
@@ -77,28 +77,28 @@ docker compose logs --no-log-prefix | jq -r 'select(.latencyMs!=null) | [.servic
 docker compose logs --no-log-prefix | jq -c 'select(.event=="access.denied" or .event=="audit.fallback")'
 
 # Tokens por consulta del agente
-docker compose logs --no-log-prefix agent-service \
-  | jq -c 'select(.llm!=null) | {correlationId, tokensIn:.llm.tokensIn, tokensOut:.llm.tokensOut, latencyMs}'
+docker compose logs --no-log-prefix ai-agent-service \
+  | jq -c 'select(.["llm.tokensIn"]!=null) | {correlationId, tokensIn:.["llm.tokensIn"], tokensOut:.["llm.tokensOut"], latencyMs}'
 ```
 
 `audit.fallback`: cuando MongoDB no está disponible, el evento de auditoría se escribe en el log; se recupera con el filtro anterior y se reinyecta cuando Mongo vuelve.
 
-Perfil `observability` (Loki + Alloy + Grafana, `needs-verification`: etiquetas exactas por confirmar al levantarlo con `docker compose --profile observability up -d`). Consultas LogQL de ejemplo:
+Hoy `docker-compose.yml` no define un perfil de observabilidad. Para un incidente así se agregaría un perfil `observability` (Loki + Alloy + Grafana; Evolución declarada en ADR-007), que se levantaría con `docker compose --profile observability up -d` (`needs-verification`: etiquetas exactas por confirmar al crearlo). Con ese perfil, las consultas LogQL serían, por ejemplo:
 
 ```logql
 {service="user-service"} | json | correlationId="<id>"
 sum by (service) (count_over_time({job=~".+"} | json | statusCode >= 500 [5m]))
-quantile_over_time(0.95, {service="agent-service"} | json | unwrap latencyMs [5m])
-sum(sum_over_time({service="agent-service"} | json | unwrap llm_tokensIn [1h]))
+quantile_over_time(0.95, {service="ai-agent-service"} | json | unwrap latencyMs [5m])
+sum(sum_over_time({service="ai-agent-service"} | json | unwrap llm_tokensIn [1h]))
 ```
 
-Si el perfil no está activo: se usa `docker compose logs` con `jq` como arriba; es más lento y sólo cubre la retención local de Docker, por lo que conviene exportar los logs relevantes antes de reiniciar contenedores (reiniciar los pierde).
+Mientras ese perfil no exista (situación actual): se usa `docker compose logs` con `jq` como arriba; es más lento y sólo cubre la retención local de Docker, por lo que conviene exportar los logs relevantes antes de reiniciar contenedores (reiniciar los pierde).
 
 ## Herramientas de debugging
 
 - `docker compose ps`, `docker compose logs <servicio>`, `docker compose exec <servicio> sh`.
-- `curl` a `/health` (vivo) y `/ready` (dependencias) de cada servicio.
-- Consola de RabbitMQ (`15672`): profundidad de colas y DLQ, consumidores activos.
+- `curl` a `/health` (vivo) de cada servicio. `/ready` comprueba dependencias solo en user-service (Postgres y RabbitMQ) y en audit-service (MongoDB y consumidor de RabbitMQ), y responde 503 si alguna falla; en auth-service y role-service `/ready` responde `ok` sin comprobar dependencias, y ai-agent-service solo expone `/health`. Para esos tres se verifican las dependencias directamente (`pg_isready`, `redis-cli ping`, `rabbitmq-diagnostics ping`, `/health` de Qdrant o `docker compose ps`); un `/ready` que verifique dependencias en ellos es una mejora del plan (ver `## Prevención y seguimiento`).
+- RabbitMQ (`docker compose exec rabbitmq rabbitmqctl list_queues`, o la consola `15672` si se publica el puerto): profundidad de colas y DLQ, consumidores activos.
 - `psql` (Postgres), `mongosh` (MongoDB), `redis-cli` (Redis).
 - `docker network inspect <red>` para DNS y pertenencia a la red.
 - Outbox: `select count(*) from outbox_events where published_at is null`; usuarios `PENDING`: `select id, created_at from users where status='PENDING'`.
@@ -131,7 +131,7 @@ Orden: primero lo reversible y de bajo riesgo.
 
 1. Congelar despliegues y revertir el último cambio de config/secreto si coincide con el inicio (reversible, alta probabilidad).
 2. Reiniciar sólo el servicio afectado (no toda la pila) tras guardar sus logs.
-3. Restaurar la dependencia caída (BD, RabbitMQ, Mongo, Redis) y confirmar con `/ready`.
+3. Restaurar la dependencia caída (BD, RabbitMQ, Mongo, Redis) y confirmar con `/ready` en user-service y audit-service, y con el healthcheck de la dependencia (`docker compose ps`) para el resto.
 4. Si el LLM está lento o con 429: subir el presupuesto temporalmente, desactivar la herramienta lenta o activar el modo degradado sin generación.
 5. Esperar al cierre de breakers (half-open) en lugar de forzar tráfico; limitar reintentos de clientes.
 6. Reconciliar usuarios `PENDING` y hacer re-drive de la DLQ sólo con la causa corregida.
@@ -161,4 +161,12 @@ Cierre (ejemplo): "Estado: Resuelto. Impacto: el servicio se restableció a las 
 
 - Postmortem sin culpables: línea de tiempo, causa raíz, qué detectó el problema, qué faltó.
 - Alertas: tasa de 5xx por servicio, breaker abierto, profundidad de DLQ y crecimiento del outbox, p95 de `latencyMs` del agente, tokens por consulta, 429 del proveedor.
-- Mejoras: las declaradas como Evolución en ADR-007 y ADR-008 (métricas/trazas distribuidas, presupuestos de costo por usuario), pruebas de caos sobre las aristas con breaker y runbooks por hipótesis (H1–H11).
+- Mejoras: las declaradas como Evolución en ADR-007 y ADR-008 (perfil `observability`, métricas/trazas distribuidas, presupuestos de costo por usuario), un `/ready` que verifique dependencias en auth-service (Postgres, Redis, RabbitMQ), role-service y ai-agent-service, pruebas de caos sobre las aristas con breaker y runbooks por hipótesis (H1–H11).
+
+Ejemplo real en este sistema (variante de H10):
+
+- Deriva de dependencias: `@qdrant/js-client-rest` 1.19 ya no expone `search`, así que toda pregunta al agente acababa degradada (`degraded=true`, solo fragmentos) sin ningún error visible.
+- Un `catch {}` vacío en la ruta degradada ocultaba la causa; las pruebas unitarias y la evaluación (13/13) usaban un Qdrant simulado, por lo que seguían en verde.
+- Lo detectó el e2e de Playwright contra el stack real (`e2e/agent.spec.ts`), que exige la fuente citada en la respuesta.
+- Corrección: versión fijada (`~1.19.0`), búsqueda con la API `query` y log `agent.degraded` con el error.
+- Lección: alertar sobre la tasa de respuestas degradadas del agente y no tragarse errores.
