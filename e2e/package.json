@@ -1,0 +1,14 @@
+{
+  "name": "@toka/e2e",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Pruebas e2e (Playwright, chromium) contra el sistema levantado con docker compose en http://localhost:8080",
+  "scripts": {
+    "e2e": "playwright test",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.55.0",
+    "@types/node": "22.0.0"
+  }
+}

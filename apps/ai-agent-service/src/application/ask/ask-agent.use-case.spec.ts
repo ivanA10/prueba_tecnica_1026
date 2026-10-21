@@ -14,12 +14,13 @@ async function setup(llm: LlmProvider, users = { lookup: jest.fn().mockResolvedV
   await add('roles', ['all'], 'El rol admin puede crear usuarios y asignar roles.');
   await add('audit', ['admin'], 'La auditoria registra eventos de acceso denegado.');
   const metrics = { record: jest.fn() };
+  const logger = { warn: jest.fn() };
   const uc = new AskAgentUseCase({
-    embedder, store, llm, users, metrics,
+    embedder, store, llm, users, metrics, logger,
     settings: { ragTopK: 3, ragMinScore: 0.1, llmMaxTokens: 100, llmTimeoutMs: 1000, agentDeadlineMs: 200 },
     priceEnv: { LLM_PRICE_INPUT_PER_MTOK: '1', LLM_PRICE_OUTPUT_PER_MTOK: '2' },
   });
-  return { uc, metrics, users };
+  return { uc, metrics, users, logger };
 }
 const input = (question: string, roles: string[], permissions: string[] = []) => ({ question, roles, permissions, authorization: 'Bearer t' });
 
@@ -48,9 +49,10 @@ describe('AskAgentUseCase', () => {
 
   it('degrades to fragments when the LLM fails', async () => {
     const failing: LlmProvider = { name: 'x', generate: async () => { throw new LlmUnavailableError('down'); } };
-    const { uc } = await setup(failing);
+    const { uc, logger } = await setup(failing);
     const r = await uc.ask(input('rol admin crear usuarios', ['viewer']));
     expect(r.degraded).toBe(true);
+    expect(logger.warn).toHaveBeenCalledWith({ event: 'agent.degraded', error: 'down' }, expect.any(String));
     expect(r.answer).toContain('admin');
     expect(r.sources.length).toBeGreaterThan(0);
   });

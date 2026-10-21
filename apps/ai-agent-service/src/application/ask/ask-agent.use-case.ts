@@ -35,6 +35,7 @@ export interface AskDeps {
   llm: LlmProvider;
   users: UserDirectoryGateway;
   metrics: AgentMetricsRecorder;
+  logger?: { warn(obj: Record<string, unknown>, msg?: string): void };
   settings: AskSettings;
   priceEnv?: PriceEnv;
   now?: () => number;
@@ -139,7 +140,8 @@ export class AskAgentUseCase {
         ...(refused ? { refused: true, refusalCode: answer.refusalCode ?? REFUSAL_NO_CONTEXT } : {}),
         meta: this.meta(start, usage, hits.length, toolCalls),
       };
-    } catch {
+    } catch (err) {
+      this.deps.logger?.warn({ event: 'agent.degraded', error: (err as Error).message }, 'agent degraded');
       response = {
         answer: this.degradedAnswer(hits),
         degraded: true,

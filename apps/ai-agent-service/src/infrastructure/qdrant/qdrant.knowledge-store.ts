@@ -16,10 +16,10 @@ export interface QdrantClientLike {
   createPayloadIndex(name: string, body: Record<string, unknown>): Promise<unknown>;
   delete(name: string, body: Record<string, unknown>): Promise<unknown>;
   upsert(name: string, body: Record<string, unknown>): Promise<unknown>;
-  search(
+  query(
     name: string,
     body: Record<string, unknown>,
-  ): Promise<Array<{ score: number; payload?: Record<string, unknown> | null }>>;
+  ): Promise<{ points: Array<{ score: number; payload?: Record<string, unknown> | null }> }>;
 }
 
 /** Deterministic UUID-shaped point id from docId#chunkIdx. */
@@ -55,13 +55,13 @@ export class QdrantKnowledgeStore implements KnowledgeStore {
 
   async search(vector: number[], opts: SearchOptions): Promise<SearchHit[]> {
     if (opts.roleScopes.length === 0) throw new Error('roleScopes is required');
-    const res = await this.client.search(COLLECTION, {
-      vector,
+    const { points } = await this.client.query(COLLECTION, {
+      query: vector,
       limit: opts.limit,
       with_payload: true,
       filter: { must: [{ key: 'roleScope', match: { any: opts.roleScopes } }] },
     });
-    return res.map((r) => {
+    return points.map((r) => {
       const p = (r.payload ?? {}) as Record<string, unknown>;
       return {
         docId: String(p.docId),
