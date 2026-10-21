@@ -64,6 +64,17 @@ describe('roles, audit, agent, layout', () => {
     expect(JSON.parse(bodies.POST).permissions).toEqual(['*']);
   });
 
+  it('roles form disables permissions (and "*") the current user does not hold', async () => {
+    mockFetch(() => ({ body: [] }));
+    const token = makeJwt({ sub: 'u3', roles: ['editor'], permissions: ['roles:read', 'roles:write', 'users:read'] });
+    renderApp(<RolesPage />, { token });
+    fireEvent.click(await screen.findByRole('button', { name: 'Crear rol' }));
+    const form = screen.getByRole('form', { name: 'Nuevo rol' });
+    expect(within(form).getByLabelText('Ver usuarios')).toBeEnabled();
+    expect(within(form).getByLabelText('Todos los permisos (*)')).toBeDisabled();
+    expect(within(form).getAllByRole('checkbox').filter((c) => (c as HTMLInputElement).disabled).length).toBeGreaterThan(1);
+  });
+
   it('permissions page renders the role x permission matrix', async () => {
     mockFetch(() => ({ body: [{ id: 'r1', name: 'admin', permissions: ['*'] }, { id: 'r2', name: 'viewer', permissions: ['users:read'] }] }));
     renderApp(<PermissionsPage />);

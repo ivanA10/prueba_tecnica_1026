@@ -2,12 +2,12 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { ALL_PERMISSIONS, PERMISSIONS, PERMISSION_LABELS, WILDCARD } from '@toka/contracts';
+import { ALL_PERMISSIONS, PERMISSIONS, hasPermission, PERMISSION_LABELS, WILDCARD } from '@toka/contracts';
 import { useCreateRoleMutation, useGetRolesQuery, useUpdateRoleMutation } from '@/api/roles';
 import type { Role } from '@/api/types';
 import { ErrorMessage, Spinner, errorText } from '@/components/shared';
 import { BadgeIcon, CloseIcon, CrownIcon, PencilIcon, PlusIcon } from '@/components/icons';
-import { useAppDispatch, useCan } from '@/store/hooks';
+import { useAppDispatch, useAppSelector, useCan } from '@/store/hooks';
 import { notify } from '@/store/notifications';
 
 export const roleSchema = z.object({
@@ -52,6 +52,8 @@ function RoleForm({ role, onDone }: { role?: Role; onDone: () => void }) {
   });
   const isLoading = createState.isLoading || updateState.isLoading;
   const [conflict, setConflict] = useState('');
+  const canAll = useCan(WILDCARD);
+  const granted = useAppSelector((st) => st.session.user?.permissions);
   const selected = watch('permissions') ?? [];
   const all = selected.includes(WILDCARD);
   const selCount = all ? ALL_PERMISSIONS.length : selected.filter((p) => p !== WILDCARD).length;
@@ -114,7 +116,7 @@ function RoleForm({ role, onDone }: { role?: Role; onDone: () => void }) {
             </span>
           </div>
           <div className="perm-all">
-            <input id="r-all" type="checkbox" value={WILDCARD} {...register('permissions')} />
+            <input id="r-all" type="checkbox" value={WILDCARD} disabled={!canAll} {...register('permissions')} />
             <span>
               <label htmlFor="r-all">Todos los permisos (*)</label>
               <span className="perm-hint">Acceso total, incluidos permisos futuros</span>
@@ -127,7 +129,7 @@ function RoleForm({ role, onDone }: { role?: Role; onDone: () => void }) {
                 <div className="perm-options">
                   {g.perms.map((p) => (
                     <label key={p}>
-                      <input type="checkbox" value={p} disabled={all} {...register('permissions')} />
+                      <input type="checkbox" value={p} disabled={all || !(canAll || hasPermission(granted, p))} {...register('permissions')} />
                       {PERMISSION_LABELS[p]}
                     </label>
                   ))}

@@ -5,6 +5,7 @@ import {
   Get,
   HttpCode,
   Param,
+  ParseUUIDPipe,
   Patch,
   Post,
   Put,
@@ -21,7 +22,7 @@ import { AssignRoleDto, CreateUserDto, ListUsersQuery, UpdateUserDto } from './d
 import { UsersService } from './users.service';
 
 interface AuthedReq {
-  user: { sub: string; roles: string[] };
+  user: { sub: string; roles: string[]; permissions?: string[] };
 }
 
 const actorOf = (req: AuthedReq): EventActor => ({ userId: req.user.sub, roles: req.user.roles });
@@ -35,7 +36,7 @@ export class UsersController {
   @Post()
   @RequirePermissions(PERMISSIONS.USERS_WRITE)
   async create(@Body() dto: CreateUserDto, @Req() req: AuthedReq) {
-    const u = await this.users.create(dto, actorOf(req), cid());
+    const u = await this.users.create(dto, actorOf(req), cid(), req.user.permissions);
     return { id: u.id, name: u.name, email: u.email, roleId: u.roleId, status: u.status };
   }
 
@@ -47,26 +48,26 @@ export class UsersController {
 
   @Get(':id')
   @RequirePermissions(PERMISSIONS.USERS_READ)
-  get(@Param('id') id: string) {
+  get(@Param('id', ParseUUIDPipe) id: string) {
     return this.users.get(id);
   }
 
   @Patch(':id')
   @RequirePermissions(PERMISSIONS.USERS_WRITE)
-  update(@Param('id') id: string, @Body() dto: UpdateUserDto, @Req() req: AuthedReq) {
+  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateUserDto, @Req() req: AuthedReq) {
     return this.users.update(id, dto, actorOf(req), cid());
   }
 
   @Delete(':id')
   @RequirePermissions(PERMISSIONS.USERS_WRITE)
   @HttpCode(204)
-  async remove(@Param('id') id: string, @Req() req: AuthedReq): Promise<void> {
+  async remove(@Param('id', ParseUUIDPipe) id: string, @Req() req: AuthedReq): Promise<void> {
     await this.users.remove(id, actorOf(req), cid());
   }
 
   @Put(':id/role')
   @RequirePermissions(PERMISSIONS.USERS_WRITE)
-  assignRole(@Param('id') id: string, @Body() dto: AssignRoleDto, @Req() req: AuthedReq) {
-    return this.users.assignRole(id, dto.roleId, actorOf(req), cid());
+  assignRole(@Param('id', ParseUUIDPipe) id: string, @Body() dto: AssignRoleDto, @Req() req: AuthedReq) {
+    return this.users.assignRole(id, dto.roleId, actorOf(req), cid(), req.user.permissions);
   }
 }

@@ -1,13 +1,14 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Inject,
   Injectable,
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
-import { EventActor, RoutingKeys, createEnvelope } from '@toka/contracts';
+import { EventActor, RoutingKeys, WILDCARD, createEnvelope, hasPermission } from '@toka/contracts';
 import type { UserRoleAssignedPayload } from '@toka/contracts';
 import {
   AUTH_CLIENT,
@@ -39,6 +40,14 @@ export interface CreateUserInput {
 
 class BudgetExhaustedError extends Error {}
 
+/** No privilege escalation: the target role's permissions must be held by the actor ('system' is exempt). */
+function assertCanAssign(actor: EventActor, actorPermissions: readonly string[], rolePermissions: readonly string[]): void {
+  if (actor === 'system' || actorPermissions.includes(WILDCARD)) return;
+  if (rolePermissions.some((p) => p === WILDCARD || !hasPermission(actorPermissions, p))) {
+    throw new ForbiddenException('permission_escalation');
+  }
+}
+
 @Injectable()
 export class UsersService {
   constructor(
@@ -50,7 +59,7 @@ export class UsersService {
   ) {}
 
   /** Signup saga: PENDING -> role -> credentials -> ACTIVE (+ outbox user.created). */
-  async create(input: CreateUserInput, actor: EventActor, correlationId: string): Promise<UserRecord> {
+  async create(input: CreateUserInput, actor: EventActor, correlationId: string, actorPermissions: readonly string[] = []): Promise<UserRecord> {
     const start = this.now();
     const remaining = (): number => {
       const left = this.config.signupBudgetMs - (this.now() - start);
@@ -70,6 +79,7 @@ export class UsersService {
 
     try {
       const role = await this.roles.getRole(input.roleId, remaining(), correlationId);
+      assertCanAssign(actor, actorPermissions, role.permissions);
       await this.auth.putCredentials(
         id,
         {
@@ -94,6 +104,7 @@ export class UsersService {
       );
     } catch (err) {
       const compensated = await this.compensate(pending.id, correlationId);
+      if (compensated && err instanceof ForbiddenException) throw err;
       if (compensated && err instanceof RoleNotFoundError) throw new BadRequestException('Role not found');
       if (compensated && err instanceof CredentialsConflictError) {
         throw new ConflictException('Email already in use');
@@ -172,8 +183,11 @@ export class UsersService {
     }
   }
 
-  async assignRole(id: string, roleId: string, actor: EventActor, correlationId: string) {
+  async assignRole(id: string, roleId: string, actor: EventActor, correlationId: string, actorPermissions: readonly string[] = []) {
     await this.mustFind(id);
+    if (actor !== 'system' && actor.userId === id && !actorPermissions.includes(WILDCARD)) {
+      throw new ForbiddenException('permission_escalation');
+    }
     let role;
     try {
       role = await this.roles.getRole(roleId, undefined, correlationId);
@@ -182,6 +196,7 @@ export class UsersService {
       if (err instanceof DependencyUnavailableError) throw new ServiceUnavailableException('role-service unavailable');
       throw err;
     }
+    assertCanAssign(actor, actorPermissions, role.permissions);
     try {
       const user = await this.repo.persistWithOutbox(id, { roleId }, (u) =>
         createEnvelope<UserRoleAssignedPayload>({

@@ -83,6 +83,7 @@ Roles sembrados por `role-service`:
 | `operador` | `users:read`, `roles:read`, `audit:read`, `agent:ask` |
 | `auditor` | `audit:read` |
 
+- Sin escalada de privilegios: solo se pueden conceder o asignar permisos que el actor ya posee (solo `*` concede `*`); si no, 403 `permission_escalation`. El rol `admin` sembrado es inmutable (403 `admin_role_immutable`).
 - Los roles se crean y editan desde la UI (pagina Roles). No hay borrado de roles, por diseno: un rol puede
   estar asignado a usuarios y su eliminacion requiere una reasignacion (ver Evolucion).
 - El JWT lleva el claim `permissions`, que auth-service toma de su proyeccion de roles (`role_names_projection`),

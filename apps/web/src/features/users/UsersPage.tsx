@@ -2,7 +2,7 @@ import { forwardRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { PERMISSIONS } from '@toka/contracts';
+import { PERMISSIONS, WILDCARD, hasPermission } from '@toka/contracts';
 import {
   useAssignRoleMutation,
   useCreateUserMutation,
@@ -13,7 +13,7 @@ import {
 } from '@/api/users';
 import type { User } from '@/api/types';
 import { ConfirmDialog, ErrorMessage, Spinner, errorText } from '@/components/shared';
-import { useAppDispatch, useCan } from '@/store/hooks';
+import { useAppDispatch, useAppSelector, useCan } from '@/store/hooks';
 import { notify } from '@/store/notifications';
 
 export const userSchema = z.object({
@@ -206,7 +206,10 @@ export function UsersPage() {
   const limit = 10;
   const { data, isLoading, error } = useGetUsersQuery({ page, limit });
   const { data: roleData } = useGetRoleOptionsQuery();
-  const roles = Array.isArray(roleData) ? roleData : [];
+  const granted = useAppSelector((st) => st.session.user?.permissions);
+  const allRoles = Array.isArray(roleData) ? roleData : [];
+  // UX only (server enforces): offer roles whose permissions are a subset of the current user's.
+  const roles = allRoles.filter((r) => (granted ?? []).includes(WILDCARD) || r.permissions.every((p) => p !== WILDCARD && hasPermission(granted, p)));
   const [remove] = useDeleteUserMutation();
   const [assign] = useAssignRoleMutation();
   const [toDelete, setToDelete] = useState<User | null>(null);
@@ -232,7 +235,7 @@ export function UsersPage() {
     }
   }
 
-  const roleName = (id: string) => roles.find((r) => r.id === id)?.name ?? id;
+  const roleName = (id: string) => allRoles.find((r) => r.id === id)?.name ?? id;
   const pages = data ? Math.max(1, Math.ceil(data.total / data.limit)) : 1;
   const q = query.trim().toLowerCase();
   const rows = (data?.items ?? []).filter((u) => !q || `${u.name} ${u.email}`.toLowerCase().includes(q));
@@ -298,11 +301,13 @@ export function UsersPage() {
                         value={u.roleId}
                         onChange={(e) => changeRole(u.id, e.target.value)}
                       >
-                        {roles.map((r) => (
-                          <option key={r.id} value={r.id}>
-                            {r.name}
-                          </option>
-                        ))}
+                        {allRoles
+                          .filter((r) => r.id === u.roleId || roles.some((o) => o.id === r.id))
+                          .map((r) => (
+                            <option key={r.id} value={r.id} disabled={!roles.some((o) => o.id === r.id)}>
+                              {r.name}
+                            </option>
+                          ))}
                       </select>
                     ) : (
                       <span className="tag tag-neutral">{roleName(u.roleId)}</span>
