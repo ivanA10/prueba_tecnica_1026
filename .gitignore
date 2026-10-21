@@ -37,3 +37,7 @@ secrets/
 
 # Engram memory export: kept local, not versioned
 .engram/
+
+# Generated code
+apps/*/src/generated/
+apps/web/dist/

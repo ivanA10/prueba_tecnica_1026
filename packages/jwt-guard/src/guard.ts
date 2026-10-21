@@ -19,14 +19,37 @@ export class JwtAuthGuard implements CanActivate {
   private readonly timeoutMs: number;
 
   constructor(@Inject(JWT_GUARD_OPTIONS) private readonly options: JwtGuardOptions) {
+    let base: JWTVerifyGetKey;
     if (options.keyResolver) {
-      this.getKey = options.keyResolver;
+      base = options.keyResolver;
     } else if (options.jwksUri) {
-      this.getKey = createRemoteJWKSet(new URL(options.jwksUri));
+      base = createRemoteJWKSet(new URL(options.jwksUri));
     } else {
       throw new Error('JwtGuardOptions requires jwksUri or keyResolver');
     }
+    this.getKey = this.withLastGoodKeys(base);
     this.timeoutMs = options.denylistTimeoutMs ?? DEFAULT_DENYLIST_TIMEOUT_MS;
+  }
+
+  /** Caches resolved keys by kid; if a later resolution fails, falls back to the last good key. */
+  private withLastGoodKeys(resolver: JWTVerifyGetKey): JWTVerifyGetKey {
+    const cache = new Map<string, Awaited<ReturnType<JWTVerifyGetKey>>>();
+    return async (protectedHeader, token) => {
+      const kid = protectedHeader.kid;
+      try {
+        const key = await resolver(protectedHeader, token);
+        if (kid) cache.set(kid, key);
+        return key;
+      } catch (err) {
+        const cached = kid ? cache.get(kid) : undefined;
+        if (!cached) throw err;
+        this.options.logger.warn(
+          { event: 'jwks.refresh_failed', kid, error: err instanceof Error ? err.message : String(err) },
+          'JWKS resolution failed, using cached key',
+        );
+        return cached;
+      }
+    };
   }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {

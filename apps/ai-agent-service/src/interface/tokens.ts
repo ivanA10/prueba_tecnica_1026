@@ -1,0 +1,8 @@
+export const AGENT_CONFIG = 'AGENT_CONFIG';
+export const ASK_USE_CASE = 'ASK_USE_CASE';
+export const INGEST_USE_CASE = 'INGEST_USE_CASE';
+export const RATE_LIMITER = 'RATE_LIMITER';
+export const LOGGER = 'AGENT_LOGGER';
+export const REDIS = 'AGENT_REDIS';
+export const EMBEDDING_PROVIDER_TOKEN = 'EMBEDDING_PROVIDER';
+export const KNOWLEDGE_STORE_TOKEN = 'KNOWLEDGE_STORE';

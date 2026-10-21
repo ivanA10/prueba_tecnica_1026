@@ -86,7 +86,21 @@ describe('JwtAuthGuard', () => {
     expect(req.user?.sub).toBe('user-1');
   });
 
-  it('rechaza un aud incorrecto', async () => {
+  it('sigue verificando con la clave cacheada si falla el refresco del JWKS', async () => {
+    let fail = false;
+    const flaky = ((h: never, t: never) => {
+      if (fail) throw new Error('jwks fetch failed');
+      return (keyResolver as unknown as (h: never, t: never) => unknown)(h, t);
+    }) as unknown as typeof keyResolver;
+    const logger = { warn: jest.fn() };
+    const guard = new JwtAuthGuard({ issuer: ISS, audience: AUD, keyResolver: flaky, denylist: okReader, logger });
+    await expect(guard.canActivate(ctx(await sign()).context)).resolves.toBe(true);
+    fail = true;
+    await expect(guard.canActivate(ctx(await sign()).context)).resolves.toBe(true);
+    expect(logger.warn).toHaveBeenCalledWith(expect.objectContaining({ event: 'jwks.refresh_failed' }), expect.any(String));
+  });
+
+  it('rechaza un aud incorrecto',async () => {
     const { guard } = build();
     const { context } = ctx(await sign({ aud: 'otro-servicio' }));
     await expect(guard.canActivate(context)).rejects.toBeInstanceOf(UnauthorizedException);

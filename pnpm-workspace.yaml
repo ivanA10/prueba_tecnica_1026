@@ -7,3 +7,10 @@ packages:
 allowBuilds:
   '@parcel/watcher': false
   unrs-resolver: false
+  prisma: true
+  '@prisma/engines': true
+  '@prisma/client': true
+  esbuild: true
+  onnxruntime-node: true
+  protobufjs: true
+  sharp: false

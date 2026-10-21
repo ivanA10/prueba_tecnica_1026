@@ -1,0 +1,44 @@
+{
+  "name": "@toka/user-service",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "node ../../jest.run.js",
+    "lint": "eslint src --ignore-pattern \"src/generated/**\"",
+    "prisma:generate": "prisma generate"
+  },
+  "dependencies": {
+    "@nestjs/common": "^11.0.0",
+    "@nestjs/core": "^11.0.0",
+    "@nestjs/platform-express": "^11.0.0",
+    "@nestjs/config": "^4.0.0",
+    "class-validator": "^0.14.1",
+    "class-transformer": "^0.5.1",
+    "helmet": "^8.0.0",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.1",
+    "@prisma/client": "^6.0.0",
+    "amqplib": "^0.10.5",
+    "ioredis": "^5.4.1",
+    "jose": "^6.0.0",
+    "@toka/contracts": "workspace:*",
+    "@toka/logger": "workspace:*",
+    "@toka/jwt-guard": "workspace:*",
+    "@toka/http-client": "workspace:*"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^11.0.0",
+    "@nestjs/testing": "^11.0.0",
+    "@types/express": "^5.0.0",
+    "@types/supertest": "^6.0.0",
+    "supertest": "^7.0.0",
+    "@types/jest": "30.0.0",
+    "@types/node": "22.20.5",
+    "ts-jest": "29.4.15",
+    "jest": "30.5.2",
+    "typescript": "5.9.3",
+    "prisma": "^6.0.0",
+    "@types/amqplib": "^0.10.5"
+  }
+}
