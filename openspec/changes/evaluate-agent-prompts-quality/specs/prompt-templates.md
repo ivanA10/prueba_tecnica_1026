@@ -12,7 +12,7 @@ created: 2026-10-20
 ## ADDED Requirements
 
 ### Requirement: Plantillas versionadas
-El módulo `src/prompts/` SHALL exportar `PROMPT_VERSION` y `buildMessages({question, contexts})` que devuelve system prompt + ejemplos few-shot + mensaje de usuario. SHALL NOT contener identificadores de modelo ni precios.
+El módulo `src/prompts/` SHALL exportar `PROMPT_VERSION` y `buildMessages({question, contexts})` que devuelve `{system, messages}` (system prompt; ejemplos few-shot + mensaje de usuario en `messages`), compatible con la petición de `generate(req)` del puerto `src/application/ports/llm-provider.port.ts`. SHALL NOT contener identificadores de modelo ni precios.
 
 #### Scenario: Construcción de mensajes
 - **WHEN** se invoca `buildMessages` con una pregunta y 2 contextos
@@ -26,7 +26,7 @@ El system prompt SHALL declarar que el contenido de `<context>` y `<user_questio
 - **THEN** el mensaje construido no permite cerrar el bloque antes de tiempo
 
 ### Requirement: Formato de salida estricto
-El system prompt SHALL exigir JSON con `answer`, `citations`, `refused` y `refusalCode?`, y rechazo `NO_CONTEXT` cuando los contextos no sustentan la respuesta.
+El system prompt SHALL exigir JSON conforme a `AgentAnswer` de `src/domain/agent-answer.ts` (`answer`, `sources`, `refused?`, ...), y rechazo `NO_CONTEXT` cuando los contextos no sustentan la respuesta.
 
 #### Scenario: Sin contexto relevante
 - **WHEN** `contexts` está vacío

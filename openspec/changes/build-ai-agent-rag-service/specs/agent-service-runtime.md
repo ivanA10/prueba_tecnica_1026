@@ -16,7 +16,7 @@ Esqueleto, configuración, empaquetado y cierre del servicio. Decisiones: D1, D2
 ## ADDED Requirements
 
 ### Requirement: Esqueleto con capas y puertos
-El servicio SHALL existir como paquete de workspace `@toka/ai-agent-service` con capas `domain/`, `application/`, `infrastructure/`, `interface/` y los puertos `LlmProvider`, `EmbeddingProvider`, `KnowledgeStore`, `UserDirectoryGateway`, `RateLimiter`, `EventIdempotencyStore` y `AgentMetricsRecorder` en `application/ports/`. El dominio SHALL NOT importar SDKs ni frameworks. SHALL exponer `GET /health` sin autenticación y usar `@toka/logger` (JSON con `correlationId`).
+El servicio SHALL existir como paquete de workspace `@toka/ai-agent-service` con capas `domain/`, `application/`, `infrastructure/`, `interface/` y los puertos `LlmProvider`, `EmbeddingProvider`, `KnowledgeStore`, `UserDirectoryGateway`, `RateLimiter` y `AgentMetricsRecorder`, y `src/domain/agent-answer.ts` SHALL exportar el esquema de respuesta (`AgentAnswer`, `Source`, `AgentMeta`) que importa el cambio 8. Los puertos están en `application/ports/`. El dominio SHALL NOT importar SDKs ni frameworks. SHALL exponer `GET /health` sin autenticación y usar `@toka/logger` (JSON con `correlationId`).
 
 #### Scenario: Compila y arranca con la configuración mínima
 - **WHEN** se construye el servicio y se carga `loadConfig` con las variables obligatorias

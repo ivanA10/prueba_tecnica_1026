@@ -12,7 +12,7 @@ created: 2026-10-20
 ## ADDED Requirements
 
 ### Requirement: Visor de auditoría con filtros
-La pantalla de auditoría SHALL consultar `GET /api/audit/events` con los filtros `actor`, `type`, `from`, `to` y `page`, mostrar carga y error, y renderizar `type`, `actor`, `occurredAt` y `correlationId` de cada evento.
+La pantalla de auditoría SHALL consultar `GET /api/audit/events` con los filtros `actor`, `type`, `from`, `to` y `page`, mostrar carga y error, y renderizar `type`, `actorUserId`, `occurredAt` y `correlationId` (clave de fila `eventId`) de cada evento.
 
 #### Scenario: Filtro aplicado
 - **WHEN** el usuario filtra por `type=user.created`
@@ -23,14 +23,14 @@ La pantalla de auditoría SHALL consultar `GET /api/audit/events` con los filtro
 - **THEN** se muestra `ErrorMessage`
 
 ### Requirement: Panel de chat con el agente
-El panel SHALL enviar `POST /api/agent/ask` con `{question}` (no vacía, máx. 1000 caracteres, validada), deshabilitar el envío y mostrar carga mientras espera, mostrar `answer` y las fuentes, y avisar cuando `generated=false` ("respuesta basada solo en fragmentos"). Ante error SHALL mostrar `ErrorMessage` sin perder la pregunta.
+El panel SHALL enviar `POST /api/agent/ask` con `{question}` (no vacía, máx. 1000 caracteres, validada), deshabilitar el envío y mostrar carga mientras espera, mostrar `answer` y las fuentes (`docId`, `source`, `score`; `meta` se ignora), y avisar cuando `degraded=true` ("respuesta basada solo en fragmentos"). Ante error SHALL mostrar `ErrorMessage` sin perder la pregunta.
 
 #### Scenario: Pregunta y respuesta
 - **WHEN** el usuario envía una pregunta válida y el backend responde
 - **THEN** se muestra la respuesta del agente
 
-#### Scenario: Respuesta sin generación
-- **WHEN** el backend responde `generated=false`
+#### Scenario: Respuesta degradada
+- **WHEN** el backend responde `degraded=true`
 - **THEN** se muestra el aviso de respuesta basada solo en fragmentos
 
 #### Scenario: Error del agente

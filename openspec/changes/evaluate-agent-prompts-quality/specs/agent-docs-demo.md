@@ -9,6 +9,8 @@ created: 2026-10-20
 
 # Spec — agent-docs-demo
 
+El ejemplo ejecutable (`scripts/agent-demo.sh`, `docs/agent-example.md`) pertenece a `document-diagnosis-delivery` (tarea 3.2); ver nota de traspaso en `tasks.md`.
+
 ## ADDED Requirements
 
 ### Requirement: Documento de estrategia de prompts
@@ -18,9 +20,9 @@ created: 2026-10-20
 - **WHEN** se inspecciona el documento
 - **THEN** contiene las secciones de system prompt, few-shot, chain-of-thought, injection y `## Optimización de tokens`
 
-### Requirement: Ejemplo ejecutable
-`scripts/agent-demo.sh` (bash POSIX) SHALL ejecutar un flujo de punta a punta (consulta al agente con JWT de un usuario, respuesta con citas) usando el mock cuando no hay API key, e imprimir tokens y latencia. `docs/agent-example.md` SHALL documentar el comando, la salida esperada y `## Integración con el sistema existente` enlazando a `docs/architecture/08-integracion-ia-rag.md`.
+### Requirement: Trazabilidad actualizada
+`docs/traceability.md` SHALL reflejar el estado y las rutas reales de las filas EX5 que cubre este cambio.
 
-#### Scenario: Demo sin key
-- **WHEN** se ejecuta `bash scripts/agent-demo.sh` sin `ANTHROPIC_API_KEY`
-- **THEN** termina con exit 0 e imprime respuesta, citas, `tokensIn`, `tokensOut` y `latencyMs`
+#### Scenario: Filas actualizadas
+- **WHEN** se archiva el cambio
+- **THEN** EX5-R04..R07, R15, R16, R21, R22, R24 y R25 no figuran como "Planeado"

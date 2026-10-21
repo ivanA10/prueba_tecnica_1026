@@ -6,7 +6,7 @@
 
 ## Wave 0 — Raíz del workspace e infraestructura
 
-- [ ] 1.1 Workspace pnpm y herramientas base (tsconfig, Jest con umbral 70, eslint, prettier, scripts raíz)
+- [x] 1.1 Workspace pnpm y herramientas base (tsconfig, Jest con umbral 70, eslint, prettier, scripts raíz)
   - **Change:** bootstrap-monorepo-platform
   - **Spec:** `openspec/changes/bootstrap-monorepo-platform/specs/monorepo-workspace.md`
   - **Spec wave slice:** `## Wave 0 — Workspace y herramientas`
@@ -17,7 +17,7 @@
   - **Verification gate:** cmd:test -f pnpm-workspace.yaml && grep -q 'packages/' pnpm-workspace.yaml && test -f tsconfig.base.json && test -f jest.config.base.js && pnpm --version && node -e "const p=require('./package.json');process.exit(/^pnpm@/.test(p.packageManager||'')?0:1)" && for p in contracts logger jwt-guard http-client; do node -e "const p=require('./packages/$p/package.json');process.exit(p.name==='@toka/$p'?0:1)" || exit 1; done && pnpm install && pnpm -r test -- --version && pnpm exec tsc --version && pnpm exec eslint --version && pnpm exec prettier --version && node -e "const c=require('./jest.config.base.js');process.exit(c.coverageThreshold.global.lines===70&&c.collectCoverage===true?0:1)" && node -e "const p=require('./package.json');process.exit(p.scripts.build==='pnpm -r build'&&p.scripts.lint==='pnpm -r lint'&&p.scripts.test.includes('pnpm -r test')?0:1)"
   - **mockup_ref:** n/a
 
-- [ ] 1.2 Plantillas de entorno, `scripts/bootstrap-env.sh` y adiciones a `.gitignore`
+- [x] 1.2 Plantillas de entorno, `scripts/bootstrap-env.sh` y adiciones a `.gitignore`
   - **Change:** bootstrap-monorepo-platform
   - **Spec:** `openspec/changes/bootstrap-monorepo-platform/specs/infra-compose.md`
   - **Spec wave slice:** `## Wave 0 — Infraestructura local`
@@ -28,7 +28,7 @@
   - **Verification gate:** cmd:bash scripts/bootstrap-env.sh && bash scripts/bootstrap-env.sh && for s in auth user role audit ai-agent; do test -f infra/env/$s-service.env.example && test -f infra/env/$s-service.env || exit 1; done && test -f .env.example && test -f .env && test -s secrets/jwt_private.pem && openssl rsa -in secrets/jwt_private.pem -check -noout && grep -qxF '.env' .gitignore && grep -qxF 'infra/env/*.env' .gitignore && grep -qxF 'secrets/' .gitignore && grep -qxF '!.env.example' .gitignore && grep -qxF '* text=auto eol=lf' .gitattributes && { git rev-parse --git-dir >/dev/null 2>&1 && git check-ignore -q .env && git check-ignore -q secrets/jwt_private.pem && git check-ignore -q infra/env/auth-service.env || ! git rev-parse --git-dir >/dev/null 2>&1; } && ! grep -rq 'change-me' .env infra/env/*.env && p=$(grep '^AUTH_DB_PASSWORD=' .env | cut -d= -f2) && test -n "$p" && grep -q "$p" infra/env/auth-service.env && grep -q '^REDIS_PASSWORD=' .env.example
   - **mockup_ref:** n/a
 
-- [ ] 1.3 Scripts de init: Postgres (rol por base) y Mongo (`audit_user`)
+- [x] 1.3 Scripts de init: Postgres (rol por base) y Mongo (`audit_user`)
   - **Change:** bootstrap-monorepo-platform
   - **Spec:** `openspec/changes/bootstrap-monorepo-platform/specs/infra-compose.md`
   - **Spec wave slice:** `## Wave 0 — Infraestructura local`
@@ -39,7 +39,7 @@
   - **Verification gate:** cmd:sh -n infra/postgres/init/01-roles-and-databases.sh && grep -q 'REVOKE ALL ON DATABASE' infra/postgres/init/01-roles-and-databases.sh && node --check infra/mongo/init/01-audit-user.js && grep -q 'audit_db' infra/mongo/init/01-audit-user.js && test ! -e infra/rabbitmq/definitions.json && test ! -e infra/rabbitmq/rabbitmq.conf
   - **mockup_ref:** n/a
 
-- [ ] 1.4 `docker-compose.yml` solo de infraestructura (postgres, mongo, redis, rabbitmq, qdrant) con redes y healthchecks
+- [x] 1.4 `docker-compose.yml` solo de infraestructura (postgres, mongo, redis, rabbitmq, qdrant) con redes y healthchecks
   - **Change:** bootstrap-monorepo-platform
   - **Spec:** `openspec/changes/bootstrap-monorepo-platform/specs/infra-compose.md`
   - **Spec wave slice:** `## Wave 0 — Infraestructura local`
@@ -52,7 +52,7 @@
 
 ## Wave 1 — Paquetes compartidos (independientes; TDD)
 
-- [ ] 2.1 `@toka/contracts`: sobre de evento, routing keys, bindings y payload de `user.role.assigned`
+- [x] 2.1 `@toka/contracts`: sobre de evento, routing keys, bindings y payload de `user.role.assigned`
   - **Change:** bootstrap-monorepo-platform
   - **Spec:** `openspec/changes/bootstrap-monorepo-platform/specs/shared-packages.md`
   - **Spec wave slice:** n/a
@@ -63,7 +63,7 @@
   - **Verification gate:** cmd:pnpm --filter @toka/contracts test && pnpm --filter @toka/contracts build && pnpm --filter @toka/contracts lint && node -e "const c=require('./packages/contracts');const p=require('./packages/contracts/package.json');process.exit(c.EVENTS_EXCHANGE==='toka.events'&&Object.values(c.RoutingKeys).includes('user.role.assigned')&&Object.keys(p.dependencies||{}).length===0?0:1)"
   - **mockup_ref:** n/a
 
-- [ ] 2.2 `@toka/logger`: pino JSON con campos ADR-007, `correlationId` (middleware + interceptor) y redacción
+- [x] 2.2 `@toka/logger`: pino JSON con campos ADR-007, `correlationId` (middleware + interceptor) y redacción
   - **Change:** bootstrap-monorepo-platform
   - **Spec:** `openspec/changes/bootstrap-monorepo-platform/specs/shared-packages.md`
   - **Spec wave slice:** n/a
@@ -74,7 +74,7 @@
   - **Verification gate:** cmd:pnpm --filter @toka/logger test && pnpm --filter @toka/logger build && pnpm --filter @toka/logger lint && node -e "require('./packages/logger').createLogger({service:'svc-x'}).info('hi')" | grep -q '"service":"svc-x"'
   - **mockup_ref:** n/a
 
-- [ ] 2.3 `@toka/jwt-guard`: validación RS256 local con JWKS y denylist en Redis con fail-open
+- [x] 2.3 `@toka/jwt-guard`: validación RS256 local con JWKS y denylist en Redis con fail-open
   - **Change:** bootstrap-monorepo-platform
   - **Spec:** `openspec/changes/bootstrap-monorepo-platform/specs/jwt-guard.md`
   - **Spec wave slice:** n/a
@@ -85,7 +85,7 @@
   - **Verification gate:** cmd:pnpm --filter @toka/jwt-guard test && pnpm --filter @toka/jwt-guard build && pnpm --filter @toka/jwt-guard lint && grep -rq 'auth:deny:jti:' packages/jwt-guard/src && grep -rq 'auth:deny:user:' packages/jwt-guard/src
   - **mockup_ref:** n/a
 
-- [ ] 2.4 `@toka/http-client`: timeout, reintentos solo idempotentes con backoff/jitter y circuit breaker
+- [x] 2.4 `@toka/http-client`: timeout, reintentos solo idempotentes con backoff/jitter y circuit breaker
   - **Change:** bootstrap-monorepo-platform
   - **Spec:** `openspec/changes/bootstrap-monorepo-platform/specs/shared-packages.md`
   - **Spec wave slice:** n/a
@@ -98,7 +98,7 @@
 
 ## Wave 2 — Integración y cierre
 
-- [ ] 3.1 Verificación integral del workspace (build + test con cobertura + lint) e independencia de paquetes
+- [x] 3.1 Verificación integral del workspace (build + test con cobertura + lint) e independencia de paquetes
   - **Change:** bootstrap-monorepo-platform
   - **Spec:** `openspec/changes/bootstrap-monorepo-platform/specs/monorepo-workspace.md`
   - **Spec wave slice:** `## Wave 2 — Verificación integral`
@@ -109,7 +109,7 @@
   - **Verification gate:** cmd:pnpm install --frozen-lockfile && pnpm -r build && pnpm -r test -- --coverage && pnpm -r lint && for p in contracts logger jwt-guard http-client; do node -e "const s=require('./packages/$p/coverage/coverage-summary.json');process.exit(s.total.lines.pct>=70?0:1)" || exit 1; done && ! grep -rq '@toka/' packages/*/src
   - **mockup_ref:** n/a
 
-- [ ] 3.2 Smoke de infraestructura: arranque sano, aislamiento por rol, Redis con contraseña y exchanges
+- [x] 3.2 Smoke de infraestructura: arranque sano, aislamiento por rol, Redis con contraseña y exchanges
   - **Change:** bootstrap-monorepo-platform
   - **Spec:** `openspec/changes/bootstrap-monorepo-platform/specs/infra-compose.md`
   - **Spec wave slice:** `## Wave 2 — Smoke de infraestructura`
@@ -120,7 +120,7 @@
   - **Verification gate:** cmd:{ test -f .env || bash scripts/bootstrap-env.sh; } && set -a && . ./.env && set +a && ( docker compose up -d --wait && test "$(docker compose exec -T postgres psql -U "$POSTGRES_ADMIN_USER" -d postgres -tAc "select count(*) from pg_database where datname in ('auth_db','user_db','role_db')" | tr -d '\r')" = 3 && docker compose exec -T -e PGPASSWORD="$AUTH_DB_PASSWORD" postgres psql -h postgres -U auth_user -d auth_db -c 'select 1' && ! docker compose exec -T -e PGPASSWORD="$AUTH_DB_PASSWORD" postgres psql -h postgres -U auth_user -d user_db -c 'select 1' && docker compose exec -T mongo mongosh --quiet -u audit_user -p "$AUDIT_DB_PASSWORD" --authenticationDatabase audit_db audit_db --eval "db.getName()" | grep -q audit_db && ! docker compose exec -T redis redis-cli ping | grep -q PONG && docker compose exec -T -e REDISCLI_AUTH="$REDIS_PASSWORD" redis redis-cli ping | grep -q PONG && docker compose exec -T rabbitmq rabbitmqctl authenticate_user "$RABBITMQ_USER" "$RABBITMQ_PASSWORD" ); rc=$?; docker compose down -v; exit $rc
   - **mockup_ref:** n/a
 
-- [ ] 3.3 Enmienda de ADR-001 y actualización de `docs/traceability.md`
+- [x] 3.3 Enmienda de ADR-001 y actualización de `docs/traceability.md`
   - **Change:** bootstrap-monorepo-platform
   - **Spec:** `openspec/changes/bootstrap-monorepo-platform/specs/monorepo-workspace.md`
   - **Spec wave slice:** `## Wave 2 — Verificación integral`

@@ -16,7 +16,7 @@ Implementa ADR-009 y `docs/architecture/08-integracion-ia-rag.md` → `## Pipeli
 ## ADDED Requirements
 
 ### Requirement: Embeddings locales de 384 dimensiones
-`EmbeddingProvider` SHALL producir vectores de 384 dimensiones sin llamadas externas, con adaptador ONNX (MiniLM) en ejecución normal y adaptador `hash` determinista solo cuando `NODE_ENV=test`; el selector SHALL rechazar `hash` fuera de pruebas. El modelo SHALL cargarse desde un directorio local obtenido por `scripts/fetch-model.sh` con verificación `sha256`.
+`EmbeddingProvider` SHALL producir vectores de 384 dimensiones sin llamadas externas, con adaptador ONNX (MiniLM) en ejecución normal y adaptador `hash` determinista solo cuando `NODE_ENV=test`; el selector SHALL rechazar `hash` fuera de pruebas. El modelo SHALL cargarse desde un directorio local obtenido por `scripts/fetch-model.sh` con pin TOFU (la primera descarga escribe `models.sha256`; las siguientes verifican con `sha256sum -c`).
 
 #### Scenario: Hash determinista
 - **WHEN** se embebe el mismo texto dos veces con el adaptador `hash`
@@ -47,12 +47,12 @@ El chunker SHALL dividir el texto normalizado en fragmentos de ≤`CHUNK_MAX_TOK
 - **THEN** el almacén contiene únicamente los fragmentos de la segunda ingesta
 
 ### Requirement: Orígenes de ingesta
-La ingesta SHALL aceptar (1) documentos semilla de `apps/ai-agent-service/knowledge/*.md` cargados al arrancar de forma idempotente, (2) `POST /agent/ingest` solo para el rol `AGENT_ADMIN_ROLE` (403 si no; tamaño ≤`INGEST_MAX_CHARS`) y (3) el consumidor `agent.ingest` (binding `role.#`) que regenera `role-catalog-{roleId}` y es idempotente por `eventId` y tolerante al reordenamiento por `aggregateVersion`. Un mensaje no válido SHALL ir a DLQ sin reencolar; un payload sin los campos esperados SHALL registrarse con `warn` y confirmarse sin lanzar.
+La ingesta SHALL aceptar (1) documentos semilla de `apps/ai-agent-service/knowledge/*.md` cargados al arrancar de forma idempotente, (2) `POST /agent/ingest` solo para el rol `AGENT_ADMIN_ROLE` (403 si no; tamaño ≤`INGEST_MAX_CHARS`). El consumidor `agent.ingest` (binding `role.#`, regeneración de `role-catalog-{roleId}`) está **diferido a Evolución** y NO forma parte de este cambio.
 
 #### Scenario: Usuario sin rol admin
 - **WHEN** un usuario sin el rol admin llama a `POST /agent/ingest`
 - **THEN** responde 403 y no se escribe nada en el almacén
 
-#### Scenario: Evento duplicado
-- **WHEN** llega dos veces el mismo `eventId` de `role.updated`
-- **THEN** el documento se regenera una sola vez
+#### Scenario: Semilla repetida
+- **WHEN** el servicio arranca dos veces con los mismos documentos semilla
+- **THEN** el almacén no contiene fragmentos duplicados

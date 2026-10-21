@@ -49,6 +49,24 @@ Las llamadas user→role (timeout 2 s, 2 reintentos) y user→auth (timeout 3 s,
 - **WHEN** se hacen dos llamadas seguidas a la misma audiencia antes de `exp`
 - **THEN** solo se solicita un token
 
+### Requirement: Listado paginado
+`GET /users` SHALL responder `{items, page, limit, total}` con items `{id, email, name, roleId, status}` (sin datos de credenciales).
+
+#### Scenario: Listado
+- **WHEN** un admin llama `GET /users?page=1&limit=20`
+- **THEN** recibe 200 con esa forma y cada item incluye `roleId`
+
+### Requirement: Semilla del primer admin
+Si `ADMIN_SEED_EMAIL` y `ADMIN_SEED_PASSWORD` están definidos, user-service SHALL crear al arrancar ese usuario con rol `admin` mediante `CreateUser` con `actor=system`; SHALL ser idempotente (no hace nada si el email existe) y SHALL NOT registrar la contraseña.
+
+#### Scenario: Primer arranque
+- **WHEN** el email semilla no existe
+- **THEN** se crea con `actor=system` y se emite `user.created`
+
+#### Scenario: Reinicio
+- **WHEN** el email semilla ya existe
+- **THEN** no se crea nada
+
 ### Requirement: Autorización y salud
 Las rutas de usuarios SHALL exigir rol `admin` (403 en otro caso) y el servicio SHALL exponer `GET /health` (liveness) y `GET /ready` (Postgres y broker).
 

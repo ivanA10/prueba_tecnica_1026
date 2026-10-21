@@ -14,11 +14,15 @@ Implementa lo que `docs/architecture/03-flujo-de-datos.md` y `07-resiliencia.md`
 ## ADDED Requirements
 
 ### Requirement: Aprovisionamiento idempotente de credenciales
-`PUT /internal/credentials/{userId}` (cuerpo `{email, password, roleId, roleName?, roleVersion?}`) SHALL crear la credencial en estado `PENDING` con hash argon2id, sembrar `user_roles_projection` (`role_id`, `user_last_version=0`) y, si trae `roleName`/`roleVersion`, sembrar `role_names_projection` cuando falte la fila. Repetir la llamada para el mismo `userId` SHALL ser idempotente (sin duplicados y sin degradar un estado `ACTIVE`/`DISABLED`). `DELETE /internal/credentials/{userId}` SHALL borrar la credencial y revocar sus refresh, y ser idempotente. Ambos SHALL exigir un token válido con rol `service`; en otro caso responden 403. Auth SHALL NOT borrar credenciales por ningún otro camino automático.
+`PUT /internal/credentials/{userId}` (cuerpo `{email, password, roleId, roleName?, roleVersion?}`) SHALL crear la credencial en estado `PENDING` con hash argon2id, sembrar `user_roles_projection` (`role_id`, `user_last_version=0`) y, si trae `roleName`/`roleVersion`, sembrar `role_names_projection` cuando falte la fila. Si el `email` ya pertenece a otro `userId`, SHALL responder 409 sin modificar datos. Repetir la llamada para el mismo `userId` SHALL ser idempotente (sin duplicados y sin degradar un estado `ACTIVE`/`DISABLED`). `DELETE /internal/credentials/{userId}` SHALL borrar la credencial y revocar sus refresh, y ser idempotente. Ambos SHALL exigir un token válido con rol `service`; en otro caso responden 403. Auth SHALL NOT borrar credenciales por ningún otro camino automático.
 
 #### Scenario: Alta idempotente
 - **WHEN** user-service llama dos veces `PUT /internal/credentials/{userId}` con el mismo cuerpo
 - **THEN** existe una sola fila `PENDING` con proyección sembrada y ambas llamadas responden éxito
+
+#### Scenario: Email de otro usuario
+- **WHEN** `PUT /internal/credentials/{userId}` trae un `email` ya asociado a otro `userId`
+- **THEN** responde 409 y no cambia nada
 
 #### Scenario: Sin token de servicio
 - **WHEN** un token de usuario (rol `admin`) llama a `PUT` o `DELETE /internal/credentials/{userId}`
@@ -27,7 +31,7 @@ Implementa lo que `docs/architecture/03-flujo-de-datos.md` y `07-resiliencia.md`
 ### Requirement: Consumidor de proyecciones con versión por agregado
 Auth SHALL declarar la cola `auth.user-projection` con los bindings de `QueueBindings` (`user.#`, `role.updated`), `auth.user-projection.retry` y `auth.user-projection.dlq`, afirmando los exchanges con las constantes de `@toka/contracts`. Cada evento SHALL registrarse en `processed_events` en la misma transacción que el cambio de proyección (idempotencia por `eventId`). Eventos `user.*` SHALL aplicarse solo si `aggregateVersion > user_last_version`; `role.updated` solo si `aggregateVersion > last_version` del rol. Un evento con versión menor o igual SHALL ignorarse con `ack`.
 
-Reglas por tipo: `user.created` activa la credencial solo si está `PENDING` (nunca reactiva un `DISABLED`); `user.updated` con `status=DISABLED` marca la credencial `DISABLED` e invoca `RevokeUserSessions`; `user.deleted` borra la credencial e invoca `RevokeUserSessions`; `user.role.assigned` actualiza `user_roles_projection` y siembra `role_names_projection` si falta; `role.updated` actualiza `role_name`.
+Reglas por tipo: `user.created` activa la credencial si está `PENDING` **sin importar el orden de versión respecto de `user.role.assigned`** (nunca reactiva un `DISABLED`; la versión solo gobierna la proyección de rol); `user.updated` con `status=DISABLED` marca la credencial `DISABLED` e invoca `RevokeUserSessions`; `user.deleted` borra la credencial e invoca `RevokeUserSessions`; `user.role.assigned` actualiza `user_roles_projection` y siembra `role_names_projection` si falta; `role.updated` actualiza `role_name`.
 
 #### Scenario: Evento viejo o repetido
 - **WHEN** llega un evento con `aggregateVersion` ≤ la última versión almacenada del mismo agregado, o un `eventId` ya procesado

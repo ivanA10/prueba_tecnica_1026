@@ -14,7 +14,7 @@ created: 2026-10-20
 ## Wave 0 — nginx, imagen y servicio compose
 
 ### Requirement: nginx como gateway ligero sin dependencia de backends al arrancar
-La plantilla nginx SHALL servir el SPA (`try_files` a `/index.html`), exponer `/healthz` (200), enrutar `/api/auth`, `/api/users`, `/api/roles`, `/api/audit` y `/api/agent` a `${AUTH,USER,ROLE,AUDIT,AGENT}_UPSTREAM` retirando el prefijo `/api`, usar `resolver 127.0.0.11` con variables para arrancar aunque los upstreams no existan, aplicar `limit_req` a `/api/auth/login` y devolver 404 en `/internal/` y `/oauth/`.
+La plantilla nginx SHALL servir el SPA (`try_files` a `/index.html`), exponer `/healthz` (200), enrutar `/api/auth`, `/api/users`, `/api/roles`, `/api/audit` y `/api/agent` a `${AUTH,USER,ROLE,AUDIT,AGENT}_UPSTREAM` retirando el prefijo `/api`, usar `resolver 127.0.0.11` con variables para arrancar aunque los upstreams no existan, aplicar `limit_req` (con `limit_req_status 429`) a `/api/auth/login` y devolver 404 en `/internal/` y `/oauth/`.
 
 #### Scenario: Configuración válida sin backends
 - **WHEN** se ejecuta `nginx -t` en la imagen con los `ENV` por defecto

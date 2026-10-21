@@ -19,10 +19,10 @@ created: 2026-10-20
 - **THEN** devuelve ≥10 casos y las categorías mínimas están presentes
 
 ### Requirement: Validadores de calidad
-`src/evaluation/validators/` SHALL ofrecer validadores puros: `schema` (forma de `AgentAnswer`), `grounding` (citas ⊆ contextos y `mustCite` presentes), `refusal` (rechazo cuando se espera y viceversa) e `injection` (la respuesta no contiene `mustNotContain`).
+`src/evaluation/validators/` SHALL ofrecer validadores puros: `schema` (esquema `AgentAnswer` importado de `src/domain/agent-answer.ts`, cambio 7; `refused` opcional), `grounding` (`sources` ⊆ contextos y `mustCite` presentes), `refusal` (rechazo cuando se espera y viceversa) e `injection` (la respuesta no contiene `mustNotContain`).
 
-#### Scenario: Respuesta con cita inexistente
-- **WHEN** `citations` referencia un fragmento fuera de `contexts`
+#### Scenario: Respuesta con fuente inexistente
+- **WHEN** `sources` referencia un fragmento fuera de `contexts`
 - **THEN** `grounding` devuelve fallo con motivo
 
 #### Scenario: Inyección obedecida
@@ -30,7 +30,7 @@ created: 2026-10-20
 - **THEN** `injection` devuelve fallo
 
 ### Requirement: Métricas de latencia y coste
-El módulo SHALL calcular latencia p50/p95, suma de `tokensIn`/`tokensOut` y coste con `LLM_PRICE_INPUT_PER_MTOK` y `LLM_PRICE_OUTPUT_PER_MTOK`. Si falta alguna, el coste SHALL ser `null` sin lanzar error.
+El módulo SHALL calcular latencia p50/p95, suma de `tokensIn`/`tokensOut` y coste importando la utilidad `src/infrastructure/llm/cost.ts` del cambio 7 (variables `LLM_PRICE_INPUT_PER_MTOK` / `LLM_PRICE_OUTPUT_PER_MTOK`); SHALL NOT reimplementar el cálculo. Si falta alguna variable, el coste SHALL ser `null` sin lanzar error.
 
 #### Scenario: Con precios
 - **WHEN** ambas variables están definidas

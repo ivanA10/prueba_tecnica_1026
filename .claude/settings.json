@@ -74,11 +74,6 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash -c 'BD=\"${CLAUDE_PROJECT_DIR:-$(pwd)}\"; mkdir -p \"$BD/.claude/state\" 2>/dev/null; bash \"$BD/scripts/sdd-suggest-allowlist.sh\" >\"$BD/.claude/state/last-allowlist-suggestions.log\" 2>&1 || true'",
-            "description": "A6 \u2014 suggest commands run >=3x be added to permissions.allow. Reads the session trace. Stdout redirected to .claude/state/ so Claude Code does not attempt to JSON-parse the report."
-          },
-          {
-            "type": "command",
             "command": "bash -c 'BD=\"${CLAUDE_PROJECT_DIR:-$(pwd)}\"; mkdir -p \"$BD/.claude/state\" 2>/dev/null; bash \"$BD/scripts/sdd-cleanup-orphans.sh\" >\"$BD/.claude/state/last-cleanup-orphans.log\" 2>&1 || true'",
             "description": "Kill orphan browser/MCP processes at session end (anthropics/claude-code#15861). Stdout redirected to log file."
           },

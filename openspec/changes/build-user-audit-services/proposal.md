@@ -47,4 +47,4 @@ Los cambios 5–7 (compose endurecido, frontend, agente) y la verificación de p
 2. Pruebas demuestran: orden de la compensación (`DELETE` credenciales antes de borrar `PENDING`), que un `DELETE` fallido deja el usuario `PENDING`, presupuesto del alta agotado → compensación, `user.role.assigned` con `userId/roleId/roleName/roleVersion`, idempotencia por `eventId`, filtro `reason=resync` y paso a DLQ tras 3 reintentos.
 3. `scripts/smoke-audit-pipeline.sh` termina en 0: un evento válido publicado en `toka.events` aparece una vez en `audit_db`, un duplicado no crea otra fila, un `resync` no se inserta y un mensaje inválido llega a `audit.events.dlq`.
 4. Ambas imágenes construyen (`docker build`) y corren como usuario no root.
-5. Como máximo 28 pruebas en el cambio (tope 30), 12 tareas, 3 waves.
+5. Como máximo 29 pruebas en el cambio (tope 30), 12 tareas, 3 waves.
