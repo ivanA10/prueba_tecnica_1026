@@ -1,5 +1,7 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { EventEnvelope, isEventEnvelope } from '@toka/contracts';
+import { createLogger } from '@toka/logger';
+import { LOGGER } from './logging';
 
 export interface AuditDocument {
   eventId: string;
@@ -37,12 +39,15 @@ export type Outcome = { action: 'ack' } | { action: 'retry' } | { action: 'dlq';
 
 @Injectable()
 export class AuditProcessor {
-  private readonly log = new Logger(AuditProcessor.name);
+  private readonly log: ReturnType<typeof createLogger>;
 
   constructor(
     @Inject(AUDIT_REPOSITORY) private readonly repo: AuditRepository,
     @Inject(AUDIT_OPTIONS) private readonly options: { maxRetries: number },
-  ) {}
+    @Optional() @Inject(LOGGER) logger?: ReturnType<typeof createLogger>,
+  ) {
+    this.log = logger ?? createLogger({ service: 'audit-service', level: 'silent' });
+  }
 
   /** Decides what to do with a raw message: ack, retry (transient failure) or dlq (permanent / exhausted). */
   async process(content: Buffer, retryCount: number): Promise<Outcome> {
@@ -50,13 +55,20 @@ export class AuditProcessor {
     try {
       parsed = JSON.parse(content.toString('utf8'));
     } catch {
+      this.log.warn({ event: 'audit.rejected', reason: 'invalid JSON body' }, 'audit message rejected');
       return { action: 'dlq', error: 'invalid JSON body' };
     }
-    if (!isEventEnvelope(parsed)) return { action: 'dlq', error: 'invalid event envelope' };
+    if (!isEventEnvelope(parsed)) {
+      this.log.warn({ event: 'audit.rejected', reason: 'invalid event envelope' }, 'audit message rejected');
+      return { action: 'dlq', error: 'invalid event envelope' };
+    }
     const env = parsed as EventEnvelope<unknown>;
 
     if (env.reason === 'resync') {
-      this.log.debug(`skipping resync event ${env.eventId}`);
+      this.log.debug(
+        { event: 'audit.skipped', eventId: env.eventId, type: env.type, correlationId: env.correlationId },
+        'resync event skipped',
+      );
       return { action: 'ack' };
     }
 
@@ -76,11 +88,28 @@ export class AuditProcessor {
       payload: env.payload,
     };
     try {
-      await this.repo.insert(doc); // 'duplicate' counts as success (idempotent)
+      const result = await this.repo.insert(doc); // 'duplicate' counts as success (idempotent)
+      this.log.info(
+        {
+          event: result === 'inserted' ? 'audit.inserted' : 'audit.duplicate',
+          eventId: env.eventId,
+          type: env.type,
+          correlationId: env.correlationId,
+        },
+        result === 'inserted' ? 'audit event stored' : 'audit event duplicate ignored',
+      );
       return { action: 'ack' };
     } catch (err) {
       this.log.warn(
-        `audit insert failed eventId=${env.eventId} correlationId=${env.correlationId} retry=${retryCount}: ${(err as Error).message}`,
+        {
+          event: 'audit.insert_failed',
+          eventId: env.eventId,
+          type: env.type,
+          correlationId: env.correlationId,
+          retry: retryCount,
+          error: (err as Error).message,
+        },
+        'audit insert failed',
       );
       return retryCount >= this.options.maxRetries
         ? { action: 'dlq', error: `retries exhausted: ${(err as Error).message}` }

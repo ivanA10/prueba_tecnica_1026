@@ -8,6 +8,7 @@ import { createLogger } from '@toka/logger';
 import { HttpAuthClient, HttpRoleClient, ServiceTokenProvider } from './clients';
 import { loadConfig } from './config';
 import { HealthController } from './health.controller';
+import { LOGGER } from './logging';
 import { AdminSeedService, ReconcileScheduler } from './lifecycle';
 import { AmqpConnect, AmqpEventPublisher, EVENT_PUBLISHER, OutboxPublisher } from './outbox.publisher';
 import { PrismaClient } from './generated/prisma';
@@ -17,7 +18,7 @@ import { UsersController } from './users.controller';
 import { PrismaUserRepository } from './users.repository';
 import { CLOCK, USER_CONFIG, UsersService } from './users.service';
 
-export const LOGGER = 'LOGGER';
+export { LOGGER };
 const config = loadConfig();
 
 @Module({
@@ -43,8 +44,8 @@ const config = loadConfig();
     },
     {
       provide: ROLE_CLIENT,
-      inject: [ServiceTokenProvider],
-      useFactory: (tokens: ServiceTokenProvider) =>
+      inject: [ServiceTokenProvider, LOGGER],
+      useFactory: (tokens: ServiceTokenProvider, logger: ReturnType<typeof createLogger>) =>
         new HttpRoleClient(
           createHttpClient({
             baseUrl: config.roleBaseUrl,
@@ -55,12 +56,13 @@ const config = loadConfig();
             breaker: { failureThreshold: 5, resetTimeoutMs: 10000 },
           }),
           tokens,
+          logger,
         ),
     },
     {
       provide: AUTH_CLIENT,
-      inject: [ServiceTokenProvider],
-      useFactory: (tokens: ServiceTokenProvider) =>
+      inject: [ServiceTokenProvider, LOGGER],
+      useFactory: (tokens: ServiceTokenProvider, logger: ReturnType<typeof createLogger>) =>
         new HttpAuthClient(
           createHttpClient({
             baseUrl: config.authBaseUrl,
@@ -71,6 +73,7 @@ const config = loadConfig();
             breaker: { failureThreshold: 5, resetTimeoutMs: 10000 },
           }),
           tokens,
+          logger,
         ),
     },
     {
