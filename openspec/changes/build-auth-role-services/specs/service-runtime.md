@@ -14,7 +14,7 @@ created: 2026-10-20
 ### ADDED Requirements
 
 ### Requirement: Esqueleto Clean Architecture por servicio
-Cada servicio SHALL ser un paquete del workspace (`@toka/auth-service`, `@toka/role-service`) con capas `domain`, `application`, `infrastructure` e `interfaces`; los casos de uso SHALL depender de puertos, no de Prisma, Redis, `jose`, argon2 ni amqplib. SHALL exponer `GET /ready` (200 `{status:'ok'}`), usar `@toka/logger` (middleware de `correlationId` e interceptor de petición; logs JSON) y validar configuración al arrancar (falla con mensaje claro si falta una variable obligatoria). SHALL depender de `@toka/contracts`, `@toka/logger` y `@toka/jwt-guard` con `workspace:*` y NOT de otro servicio ni del código de otro `apps/*`.
+Cada servicio SHALL ser un paquete del workspace (`@toka/auth-service`, `@toka/role-service`) con capas `domain`, `application`, `infrastructure` e `interfaces`; los casos de uso SHALL depender de puertos, no de Prisma, Redis, `jose`, argon2 ni amqplib. SHALL exponer `GET /health` y `GET /ready` (ambos 200 `{status:'ok'}`, públicos), usar `@toka/logger` (middleware de `correlationId` e interceptor de petición; logs JSON) y validar configuración al arrancar (falla con mensaje claro si falta una variable obligatoria). SHALL depender de `@toka/contracts`, `@toka/logger` y `@toka/jwt-guard` con `workspace:*` y NOT de otro servicio ni del código de otro `apps/*`.
 
 #### Scenario: Servicio aislado
 - **WHEN** se inspeccionan los imports de `apps/auth-service/src` y `apps/role-service/src`

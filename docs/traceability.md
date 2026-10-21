@@ -6,14 +6,14 @@ Convenciones:
 
 - **ID**: `EX<n>-R<NN>` por ejercicio; `EX0-R<NN>` para "Entregables Esperados".
 - **Tipo**: técnico / tecnología / entrega / evaluación / instrucción.
-- **Estado**: `Planeado` (cambio aún sin ejecutar), `En diseño` (lo produce el cambio 1, `design-architecture-docs`, en curso). Los estados se actualizan al archivar cada cambio.
+- **Estado**: `Planeado` (cambio aún sin ejecutar), `Implementado` (artefacto existente en disco), `En diseño` (lo produce el cambio 1, `design-architecture-docs`, en curso). Los estados se actualizan al archivar cada cambio.
 - **[RIESGO]**: requisito propenso a omitirse; el validador lo revisa de forma explícita.
 - Evolución declarada (no implementada, riesgo aceptado, ver ADRs): adaptador OpenAI/Azure OpenAI, outbox de auth, `access.denied` por AMQP, rotación de claves JWKS, discovery OIDC, ACL de Redis, barrido de credenciales en auth.
 
 ## Cambios planeados
 
 1. `design-architecture-docs` — arquitectura, 10 ADRs y esta matriz (solo documentación).
-2. `bootstrap-monorepo-platform` — monorepo pnpm, paquetes compartidos (`logger`, `jwt-guard`, `contracts`), init de Postgres, esqueleto de servicios.
+2. `bootstrap-monorepo-platform` — monorepo pnpm, paquetes compartidos (`logger`, `jwt-guard` completo, `contracts`, `http-client`) e init de Postgres.
 3. `build-auth-role-services` — auth-service y role-service (JWT RS256/JWKS, RBAC, refresh, denylist).
 4. `build-user-audit-services` — user-service y audit-service (saga de alta, outbox, RabbitMQ, auditoría en Mongo).
 5. `harden-compose-resilience-security` — docker-compose completo, healthchecks, resiliencia como código, seguridad OWASP, perfil `observability`.
@@ -55,11 +55,11 @@ Convenciones:
 | EX2-R03 | Comunicación: al menos un ejemplo asíncrono (RabbitMQ o Kafka) para eventos | técnico | build-user-audit-services | `apps/user-service/` (outbox), `apps/audit-service/` (consumidor `audit.events`), `docs/adrs/ADR-004-async-rabbitmq-events.md` | Planeado |
 | EX2-R04 | Arquitectura: aplicar DDD y Clean Architecture en cada microservicio | técnico | build-auth-role-services | `apps/*/src/{domain,application,infrastructure,interfaces}`, `docs/architecture/05-ddd-clean-cqrs.md` | Planeado |
 | EX2-R05 | Autenticación: OAuth2/OIDC distribuida entre microservicios (puede usar JWT con validación distribuida) | técnico | build-auth-role-services | `apps/auth-service/` (RS256, JWKS, `/oauth/token`), `packages/jwt-guard/`, `docs/adrs/ADR-003-auth-jwt-rs256-jwks-rbac.md` | Planeado |
-| EX2-R06 | Base de datos: estrategia multi-DB según diseño (Postgres, MongoDB, Redis) | técnico | bootstrap-monorepo-platform | `infra/postgres/init/` (rol por base), `docs/architecture/02-justificacion-tecnica.md` | Planeado |
+| EX2-R06 | Base de datos: estrategia multi-DB según diseño (Postgres, MongoDB, Redis) | técnico | bootstrap-monorepo-platform | `infra/postgres/init/01-roles-and-databases.sh` (rol por base), `docs/architecture/02-justificacion-tecnica.md` | Implementado |
 | EX2-R07 | Dockerización: cada microservicio con su Dockerfile y un docker-compose.yml que orqueste servicios y dependencias | técnico | harden-compose-resilience-security | `apps/*/Dockerfile`, `docker-compose.yml`, `.env.example` | Planeado |
 | EX2-R08 | Tests: unitarios con coverage mínimo del 70% | técnico | build-user-audit-services | `apps/*/jest.config.*` (`coverageThreshold` 70 por servicio), `docs/adrs/ADR-007-observability-quality-testing.md` | Planeado |
-| EX2-R09 | Logging: logging estructurado (JSON) en cada microservicio | técnico | bootstrap-monorepo-platform | `packages/logger/`, `docs/adrs/ADR-007-observability-quality-testing.md` | Planeado |
-| EX2-R10 | Tecnología: lenguaje libre (C#, Python FastAPI o Node.js Express/NestJS) | tecnología | bootstrap-monorepo-platform | `docs/adrs/ADR-001-monorepo-typescript-nestjs.md`, `package.json`, `pnpm-workspace.yaml` | Planeado |
+| EX2-R09 | Logging: logging estructurado (JSON) en cada microservicio | técnico | bootstrap-monorepo-platform | `packages/logger/`, `docs/adrs/ADR-007-observability-quality-testing.md` | Implementado |
+| EX2-R10 | Tecnología: lenguaje libre (C#, Python FastAPI o Node.js Express/NestJS) | tecnología | bootstrap-monorepo-platform | `docs/adrs/ADR-001-monorepo-typescript-nestjs.md`, `package.json`, `pnpm-workspace.yaml` | Implementado |
 | EX2-R11 | Tecnología: ORM (EF Core, SQLAlchemy o equivalente según stack) | tecnología | build-auth-role-services | `apps/*/prisma/schema.prisma`, `docs/architecture/02-justificacion-tecnica.md` | Planeado |
 | EX2-R12 | Tecnología: base de datos Postgres, MongoDB y Redis (contenedores) | tecnología | harden-compose-resilience-security | `docker-compose.yml` (`postgres`, `mongo`, `redis`) | Planeado |
 | EX2-R13 | Tecnología: mensajería RabbitMQ o Kafka (contenedores) | tecnología | harden-compose-resilience-security | `docker-compose.yml` (`rabbitmq`), definiciones de exchange y colas | Planeado |
@@ -75,13 +75,13 @@ Convenciones:
 | EX2-R23 | Evaluación: código limpio, seguro y siguiendo principios SOLID | evaluación | build-auth-role-services | `apps/*/src/`, `docs/adrs/ADR-006-clean-architecture-ddd.md` | Planeado |
 | EX2-R24 | Evaluación: aplicación correcta de DDD y Clean Architecture | evaluación | build-auth-role-services | `apps/*/src/{domain,application,infrastructure,interfaces}` | Planeado |
 | EX2-R25 | Evaluación: comunicación síncrona y asíncrona bien implementada | evaluación | build-user-audit-services | `apps/user-service/`, `apps/audit-service/`, `packages/contracts/` | Planeado |
-| EX2-R26 | Evaluación: independencia y desacoplamiento entre microservicios (BD por servicio, sin dominio compartido) | evaluación | bootstrap-monorepo-platform | `docs/adrs/ADR-001-monorepo-typescript-nestjs.md`, `docs/adrs/ADR-002-service-boundaries-db-per-service.md`, `infra/postgres/init/` | Planeado |
+| EX2-R26 | Evaluación: independencia y desacoplamiento entre microservicios (BD por servicio, sin dominio compartido) | evaluación | bootstrap-monorepo-platform | `docs/adrs/ADR-001-monorepo-typescript-nestjs.md`, `docs/adrs/ADR-002-service-boundaries-db-per-service.md`, `infra/postgres/init/01-roles-and-databases.sh` | Implementado |
 | EX2-R27 | Evaluación: autenticación distribuida funcionando correctamente; incluye autorización además de autenticación [RIESGO] (RBAC por rol) | evaluación | build-auth-role-services | `packages/jwt-guard/`, `apps/role-service/`, `docs/adrs/ADR-003-auth-jwt-rs256-jwks-rbac.md` | Planeado |
 | EX2-R28 | Evaluación: tests con coverage adecuado | evaluación | build-user-audit-services | `apps/*/coverage/`, `docs/adrs/ADR-007-observability-quality-testing.md` | Planeado |
 | EX2-R29 | Evaluación: Dockerización completa y funcional (compose, healthchecks, `depends_on` con `service_healthy`) | evaluación | harden-compose-resilience-security | `docker-compose.yml`, `docs/architecture/04-docker-compose-diseno.md` | Planeado |
-| EX2-R30 | Evaluación: logging estructurado implementado | evaluación | bootstrap-monorepo-platform | `packages/logger/`, `docs/adrs/ADR-007-observability-quality-testing.md` | Planeado |
+| EX2-R30 | Evaluación: logging estructurado implementado | evaluación | bootstrap-monorepo-platform | `packages/logger/`, `docs/adrs/ADR-007-observability-quality-testing.md` | Implementado |
 | EX2-R31 | Evaluación: seguridad OWASP (validación de inputs, sanitización, etc.) [RIESGO] (OWASP mapeado a código, no solo a texto) | evaluación | harden-compose-resilience-security | `docs/architecture/06-seguridad-escalabilidad.md` (`## OWASP`), validación en `apps/*/src/interfaces/`, `limit_req` en nginx | Planeado |
-| EX2-R32 | Evaluación: resiliencia como código [RIESGO] (timeouts, backoff, circuit breaker en 4 aristas, DLQ) — complementa la evaluación de Ex1 | evaluación | harden-compose-resilience-security | `apps/{user-service,ai-agent-service}/src/infrastructure/http/` (cliente HTTP con timeout, backoff y breaker; solo estos dos servicios hacen llamadas salientes con breaker, en su capa `infrastructure` según ADR-001/ADR-006; ni `packages/contracts/` ni `packages/jwt-guard/`). Si la duplicación entre ambos molesta, `packages/http-client` (transversal, sin dominio) se decide en `bootstrap-monorepo-platform`, `docs/architecture/07-resiliencia.md` | Planeado |
+| EX2-R32 | Evaluación: resiliencia como código [RIESGO] (timeouts, backoff, circuit breaker en 4 aristas, DLQ) — complementa la evaluación de Ex1 | evaluación | harden-compose-resilience-security | `packages/http-client/` (cliente HTTP transversal sin dominio, con timeout, backoff y breaker; decidido y entregado en `bootstrap-monorepo-platform`; solo user-service y ai-agent-service lo usan en sus aristas salientes con breaker, desde su capa `infrastructure`; ni `packages/contracts/` ni `packages/jwt-guard/`), `docs/architecture/07-resiliencia.md` | Planeado |
 
 ## Ejercicio 3
 

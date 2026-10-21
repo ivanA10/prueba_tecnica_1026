@@ -58,6 +58,13 @@ Los endpoints SHALL protegerse con `JwtAuthGuard` de `@toka/jwt-guard` con `audi
 ### Requirement: Re-sync del catálogo
 Al arrancar (`OnApplicationBootstrap`, sin bloquear el arranque) role-service SHALL publicar `role.updated` por cada rol con `actor='system'`, `reason='resync'`, `aggregateVersion` = `version` del rol y `eventId` = `deterministicEventId(roleId, version)`. Si el broker no está disponible SHALL registrar `warn` y continuar.
 
+### Requirement: Seed idempotente del rol admin
+Al arrancar, antes del re-sync, role-service SHALL crear el rol `admin` (`permissions=['*']`, `version=1`) si no existe y publicar `role.created` solo cuando lo cree. Repetir el arranque SHALL NOT duplicarlo ni cambiar su `version`. El primer usuario admin lo siembra el cambio 4.
+
+#### Scenario: Seed repetido
+- **WHEN** el servicio arranca con el rol `admin` ya existente
+- **THEN** no crea ni publica nada para ese rol (salvo el re-sync)
+
 #### Scenario: Eventos deterministas
 - **WHEN** el servicio arranca dos veces sin cambios en los roles
 - **THEN** publica los mismos `eventId` ambas veces, con `actor='system'` y `reason='resync'`

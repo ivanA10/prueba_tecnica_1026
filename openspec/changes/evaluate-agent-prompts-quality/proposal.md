@@ -17,12 +17,12 @@ El Ejercicio 5 exige documentar una estrategia de prompt engineering y entregar 
 1. Plantillas de prompt versionadas (system + few-shot, con CoT acotado) en `apps/ai-agent-service/src/prompts/`.
 2. Módulo de evaluación en `apps/ai-agent-service/src/evaluation/` con dataset (≥10 casos), validadores (esquema, grounding, rechazo, inyección), métricas (latencia p50/p95, tokens, coste desde env) y runner.
 3. Comando `pnpm --filter ai-agent-service eval` que genera `docs/eval/report.md`; funciona sin API key con el proveedor mock.
-4. Documentación: `docs/prompt-engineering.md` (con `## Optimización de tokens`) y ejemplo ejecutable `scripts/agent-demo.sh` + `docs/agent-example.md` con la explicación de integración.
+4. Documentación: `docs/prompt-engineering.md` (con `## Optimización de tokens`) (el ejemplo ejecutable `scripts/agent-demo.sh` + `docs/agent-example.md` pertenece al cambio 9, tarea 3.2).
 
 ## Alcance
 
 - Prompts versionados, dataset, validadores, métricas, runner, reporte.
-- Documentos y script de demo listados arriba.
+- `docs/prompt-engineering.md`. Demo y `agent-example.md`: fuera (cambio 9; nota de traspaso en `tasks.md`).
 - Actualización de filas EX5-* en `docs/traceability.md` (estado Planeado → Implementado al archivar).
 
 ## Fuera de alcance
@@ -37,8 +37,7 @@ El Ejercicio 5 exige documentar una estrategia de prompt engineering y entregar 
 - `pnpm --filter ai-agent-service eval` termina con exit 0 sin `ANTHROPIC_API_KEY` y escribe `docs/eval/report.md` con p50/p95, tokens in/out, coste y tasas de esquema/grounding/rechazo.
 - Dataset ≥10 casos, incluye ≥2 de prompt injection y ≥2 fuera de contexto.
 - Si faltan variables de precio, el reporte indica `coste: n/d` sin fallar.
-- `bash scripts/agent-demo.sh` ejecuta el flujo de punta a punta con mock.
-- Pruebas ≤30 en el cambio.
+- Pruebas (16) ≤30 en el cambio.
 
 ## Supuestos (dependencia del cambio 7)
 
@@ -46,4 +45,4 @@ Ver `design.md` → "Supuestos sobre el cambio 7". Si las rutas difieren, se rec
 
 ## Nota de trazabilidad
 
-La matriz asigna EX5-R17 (`docs/agent-example.md`, `scripts/agent-demo.sh`) a `document-diagnosis-delivery`. Este cambio los crea por instrucción del orquestador; al archivar se debe reasignar R17 aquí o dejar que el cambio 9 solo los enlace.
+EX5-R17 (`docs/agent-example.md`, `scripts/agent-demo.sh`) y R18 quedan en `document-diagnosis-delivery` / cambio 7 según la matriz; este cambio no los toca.

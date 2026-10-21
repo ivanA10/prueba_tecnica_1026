@@ -12,7 +12,7 @@ created: 2026-10-20
 ## ADDED Requirements
 
 ### Requirement: Gestión de usuarios con rol
-La pantalla de usuarios SHALL listar `GET /api/users` con paginación, mostrar `Spinner` al cargar y `ErrorMessage` ante fallo. Para administradores SHALL permitir crear (`POST`, validado con zod: nombre, email, contraseña ≥8 y `roleId` opcional), editar (`PATCH`), borrar (`DELETE`, tras `ConfirmDialog`) y asignar rol (`PUT /api/users/{id}/role`). Cada mutación exitosa SHALL notificar éxito e invalidar la lista; un usuario nuevo se muestra con estado `PENDING`.
+La pantalla de usuarios SHALL listar `GET /api/users` con paginación (`{items, page, limit, total}`; cada item trae `roleId`, cuyo nombre se resuelve con la lista de roles y, si el usuario no es admin y `GET /roles` da 403, se muestra el `roleId`), mostrar `Spinner` al cargar y `ErrorMessage` ante fallo. Para administradores SHALL permitir crear (`POST`, validado con zod: nombre, email, contraseña ≥8 y `roleId` obligatorio), editar (`PATCH`), borrar (`DELETE`, tras `ConfirmDialog`) y asignar rol (`PUT /api/users/{id}/role`). Cada mutación exitosa SHALL notificar éxito e invalidar la lista; un usuario nuevo se muestra con estado `PENDING`.
 
 #### Scenario: Lista con carga
 - **WHEN** se abre `/users` y la petición está en curso
@@ -44,3 +44,7 @@ La pantalla de roles SHALL listar `GET /api/roles` (nombre, permisos, versión) 
 #### Scenario: Error de roles
 - **WHEN** la petición falla con 500
 - **THEN** se muestra `ErrorMessage`
+
+#### Scenario: Usuario no admin
+- **WHEN** `GET /api/roles` responde 403
+- **THEN** la pantalla de roles muestra el mensaje del 403 vía `ErrorMessage`

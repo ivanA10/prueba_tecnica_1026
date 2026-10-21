@@ -42,7 +42,7 @@ Sin `auth-service` nadie puede autenticarse ni obtener tokens de servicio, y sin
 - **Servicios `auth-service`/`role-service` en `docker-compose.yml`, `infra/env/*.env` nuevas variables, `depends_on`, secreto `jwt_private_key`**: cambio 5 (`harden-compose-resilience-security`). Aquí solo Dockerfile y migraciones verificables.
 - **Rate limit de login** (`auth:rl:login:{ip}` y `limit_req` de nginx): cambio 5 (OWASP, EX2-R31). Aquí el login no limita intentos.
 - **`DELETE /roles/{id}`**: el contrato de eventos (`RoutingKeys`) no define `role.deleted`; borrar roles sin evento dejaría proyecciones y agente desfasados. Se difiere a Evolución (decisión vetable en el 📋).
-- **Seed del primer administrador y de roles iniciales**: sin un admin sembrado nadie puede crear roles ni usuarios. Pertenece al cambio 4 (dueño de usuarios) o al 5 (script de arranque); declarado como riesgo abierto.
+- **Seed del primer usuario administrador**: pertenece al cambio 4 (dueño de usuarios). Este cambio solo siembra el **rol** `admin` (idempotente, en role-service al arrancar, tarea 3.1). `SERVICE_CLIENTS` de auth debe aceptar el `SVC_CLIENT_ID/SECRET` de cada servicio (mismo valor en ambos `.env`): lo cablean `bootstrap-env.sh` y el cambio 5.
 - **Rotación JWKS, discovery OIDC, ACL de Redis, outbox de auth, barrido de credenciales, `access.denied` por AMQP, claim `permissions[]`** (Evolución declarada en ADR-003/004).
 - Pruebas de integración con Postgres/Redis/RabbitMQ reales (solo el smoke de migraciones de la tarea 3.3); las demás son unitarias/HTTP con dobles.
 - Paquete compartido para el adaptador AMQP: se duplica un adaptador pequeño por servicio (design D7); promoverlo a paquete se evalúa en el cambio 4.

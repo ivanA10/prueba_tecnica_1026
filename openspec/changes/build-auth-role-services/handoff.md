@@ -22,7 +22,7 @@ Implementar `apps/auth-service` (login argon2id, JWT RS256 con `kid`/`aud`, JWKS
 ## Open risks / follow-ups
 - **Precondición**: cambio 2 completo antes de 1.1. APIs usadas: `design.md` → S1–S12 (**reconcile after change 2**); diferencias se reportan al orquestador, no se editan paquetes del cambio 2.
 - S10: permisos de `public` en Postgres para `auth_user`/`role_user` (lo detecta 3.3).
-- Seed del primer admin (cambio 4/5); variables de entorno nuevas y servicios en compose (cambio 5); promover `RolesGuard` y adaptador AMQP si se repiten en el cambio 4.
+- Rol `admin` sembrado en 3.1; primer usuario admin = cambio 4; `SERVICE_CLIENTS` de auth debe incluir el `SVC_CLIENT_ID/SECRET` de user-service (bootstrap-env.sh/cambio 5); instalación = paso previo del orquestador (ninguna tarea instala); variables de entorno nuevas y servicios en compose (cambio 5); promover `RolesGuard` y adaptador AMQP si se repiten en el cambio 4.
 - `spec/build-auth-role-services` y `gate/plan-approved/build-auth-role-services` en Engram: pendientes (el planner no tuvo `engram`); los guarda el orquestador.
 
 ## Source-of-truth files

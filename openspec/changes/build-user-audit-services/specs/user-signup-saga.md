@@ -14,7 +14,7 @@ Implementa `docs/architecture/03-flujo-de-datos.md` (flujo de alta) y `07-resili
 ## ADDED Requirements
 
 ### Requirement: Saga PENDING → ACTIVE
-`CreateUser` SHALL crear el usuario con `status=PENDING`, validar el rol con `GET /roles/{id}`, aprovisionar credenciales con `PUT /internal/credentials/{userId}` y, solo entonces, marcar `ACTIVE` y escribir `outbox_events(user.created)` en una única transacción. La contraseña SHALL NOT persistirse ni registrarse en logs en user-service.
+`CreateUser` SHALL crear el usuario con `status=PENDING`, validar el rol con `GET /roles/{id}`, aprovisionar credenciales con `PUT /internal/credentials/{userId}` con cuerpo `{email, password, roleId, roleName, roleVersion}` (nombre y versión del rol tomados de `GET /roles/{id}`) y, solo entonces, marcar `ACTIVE` y escribir `outbox_events(user.created)` en una única transacción. La contraseña SHALL NOT persistirse ni registrarse en logs en user-service.
 
 #### Scenario: Camino feliz
 - **WHEN** el rol existe y auth aprovisiona las credenciales

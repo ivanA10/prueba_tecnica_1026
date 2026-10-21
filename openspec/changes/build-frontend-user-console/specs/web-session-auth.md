@@ -20,6 +20,13 @@ El token de acceso SHALL vivir únicamente en el slice `session` de Redux. El c�
 - **WHEN** se busca `localStorage` o `sessionStorage` en `apps/web/src`
 - **THEN** no hay coincidencias
 
+### Requirement: Usuario de sesión derivado del JWT
+Login y refresh devuelven `{accessToken, expiresIn}` sin objeto `user`. El cliente SHALL decodificar el payload del JWT (sin verificar firma) para obtener `sub` y `roles` y guardarlos en `session.user`, tanto en el login como en el refresh inicial.
+
+#### Scenario: Roles tras refresh
+- **WHEN** el refresh inicial devuelve un JWT con `roles: ["admin"]`
+- **THEN** `session.user.roles` contiene `admin`
+
 ### Requirement: Reautenticación con refresh único
 `baseQueryWithReauth` SHALL adjuntar `Authorization: Bearer <token>`; ante un 401 SHALL llamar una sola vez a `POST /api/auth/refresh` aunque haya varias peticiones concurrentes, reintentar la petición original una vez con el nuevo token y, si el refresh falla, despachar `clearSession`.
 

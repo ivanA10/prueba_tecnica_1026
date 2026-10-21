@@ -21,14 +21,14 @@ La factory SHALL devolver el adaptador Anthropic cuando exista `ANTHROPIC_API_KE
 - **THEN** el proveedor activo es `mock`, el arranque no falla y el RAG sigue disponible
 
 ### Requirement: Adaptador `mock` determinista
-El `mock` SHALL generar texto determinista a partir solo de los fragmentos recibidos, devolver `usage.tokensIn` y `usage.tokensOut` calculados de forma estable y, si la pregunta coincide con `/usuari|user/i` y hay herramienta disponible, SHALL emitir una llamada a `lookup_users` en la primera invocación.
+El `mock` SHALL generar un JSON determinista `{answer, sources:[{docId,...}]}` (conforme a `src/domain/agent-answer.ts`) a partir solo de los fragmentos recibidos, devolver `usage.tokensIn` y `usage.tokensOut` calculados de forma estable y, si la pregunta coincide con `/usuari|user/i` y hay herramienta disponible, SHALL emitir una llamada a `lookup_users` en la primera invocación.
 
 #### Scenario: Pregunta sobre usuarios
 - **WHEN** la pregunta menciona usuarios y se ofrece la herramienta `lookup_users`
 - **THEN** el `mock` responde con un `toolCall` y, tras el resultado, con texto determinista
 
 ### Requirement: Adaptador Anthropic
-El adaptador SHALL usar el SDK oficial con tool use (esquema de entrada de la herramienta), prompt caching del prefijo estable, `maxRetries` (1) y `timeout` explícitos, `AbortSignal` de la petición y `max_tokens` acotado; SHALL leer el modelo de `LLM_MODEL` y devolver el `usage` reportado por el proveedor. Antes de implementarlo, el implementador SHALL verificar el uso del SDK y el modelo vigente contra la documentación de Anthropic y registrar la evidencia (fecha, versión del SDK, fuente).
+El adaptador SHALL usar el SDK oficial con tool use (esquema de entrada de la herramienta), prompt caching del prefijo estable, `maxRetries` (1) y `timeout` explícitos, `AbortSignal` de la petición y `max_tokens` acotado; SHALL leer el modelo de `LLM_MODEL` y devolver el `usage` reportado por el proveedor. Antes de implementarlo, el implementador SHALL verificar el uso del SDK y el modelo vigente con la skill `claude-api` del harness y la documentación de Anthropic y registrar la evidencia (fecha, versión del SDK, fuente).
 
 #### Scenario: Respuesta con uso reportado
 - **WHEN** el cliente (doble) devuelve texto y `usage`
@@ -46,7 +46,7 @@ El adaptador SHALL usar el SDK oficial con tool use (esquema de entrada de la he
 - **THEN** la siguiente llamada falla de inmediato con `LlmUnavailableError` sin invocar al proveedor
 
 ### Requirement: Coste estimado por entorno
-`estimateCost(usage, env)` SHALL calcular el coste con `LLM_PRICE_INPUT_PER_MTOK` y `LLM_PRICE_OUTPUT_PER_MTOK` solo si ambas son números válidos y devolver `null` en caso contrario. El repositorio SHALL NOT contener valores de precio.
+`estimateCost(usage, env)` SHALL calcular el coste con `LLM_PRICE_INPUT_PER_MTOK` y `LLM_PRICE_OUTPUT_PER_MTOK` solo si ambas son números válidos y devolver `null` en caso contrario. El repositorio SHALL NOT contener valores de precio. La función SHALL exportarse desde `infrastructure/llm/cost.ts` para su reutilización por el cambio 8.
 
 #### Scenario: Sin precios configurados
 - **WHEN** las variables de precio no están definidas

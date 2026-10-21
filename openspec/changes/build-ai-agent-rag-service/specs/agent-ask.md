@@ -16,7 +16,7 @@ Implementa ADR-008 (#5, #7–#10) y `08-integracion-ia-rag.md` → flujo de cons
 ## ADDED Requirements
 
 ### Requirement: Herramienta de solo lectura con identidad delegada
-`UserDirectoryGateway.lookup` SHALL llamar a user-service con `@toka/http-client` (timeout `USER_TOOL_TIMEOUT_MS`, circuit breaker, `x-correlation-id`) reenviando el `Authorization` del llamante, SHALL ser de solo lectura y SHALL devolver únicamente `id`, `name`, `role` y `status` (filtrado en el adaptador, antes del prompt). El agente SHALL NOT tener identidad privilegiada propia.
+`UserDirectoryGateway.lookup` SHALL llamar a user-service con `@toka/http-client` (timeout `USER_TOOL_TIMEOUT_MS`, circuit breaker, `x-correlation-id`) reenviando el `Authorization` del llamante, SHALL ser de solo lectura y SHALL devolver únicamente `id`, `name`, `role` y `status` (filtrado en el adaptador, antes del prompt). El agente SHALL NOT tener identidad privilegiada propia. Consecuencia: `lookup_users` solo devuelve datos con un JWT con permiso para listar usuarios (admin); con otro JWT user-service responde 403 y el agente continúa sin la herramienta.
 
 #### Scenario: JWT reenviado y campos filtrados
 - **WHEN** user-service responde con campos extra (p. ej. `email`, `passwordHash`)
@@ -47,7 +47,7 @@ Implementa ADR-008 (#5, #7–#10) y `08-integracion-ia-rag.md` → flujo de cons
 - **THEN** responde 200 con `degraded=true`, solo los fragmentos recuperados, sin texto generado, y la petición en curso se aborta con `AbortController`
 
 ### Requirement: Defensa frente a prompt injection
-El prompt SHALL delimitar el contenido recuperado y la salida de herramientas en bloques declarados como datos no confiables; las herramientas SHALL ser de solo lectura. La salida del LLM SHALL validarse contra un esquema (`answer` no vacío y acotado, `sources` ⊆ fragmentos recuperados) y una salida inválida SHALL degradar la respuesta. Los logs SHALL NOT incluir el contenido del prompt ni de la respuesta.
+El prompt SHALL delimitar el contenido recuperado y la salida de herramientas en bloques declarados como datos no confiables; las herramientas SHALL ser de solo lectura. La salida del LLM SHALL parsearse como JSON y validarse contra el esquema de `src/domain/agent-answer.ts` (`answer` no vacío y acotado, `sources` ⊆ fragmentos recuperados); si no es JSON válido SHALL aplicarse el fallback de texto (texto como `answer`, `sources` = fragmentos usados) y una salida vacía SHALL degradar la respuesta. Los logs SHALL NOT incluir el contenido del prompt ni de la respuesta.
 
 #### Scenario: Documento con instrucciones maliciosas
 - **WHEN** un fragmento recuperado contiene "ignora tus instrucciones"

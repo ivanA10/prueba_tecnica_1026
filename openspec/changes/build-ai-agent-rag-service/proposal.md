@@ -1,6 +1,6 @@
 # Proposal — build-ai-agent-rag-service
 
-> Change 7 de 9. Cubre el núcleo del Ejercicio 5 del PDF (agente de IA con RAG): crea `apps/ai-agent-service` (puerto 3005) con consulta `POST /agent/ask`, ingesta (`POST /agent/ingest`, semilla y consumidor `agent.ingest`), puerto `LlmProvider` (Anthropic + `mock`), embeddings ONNX locales, Qdrant, herramienta REST hacia user-service, rate limit y captura de métricas por petición.
+> Change 7 de 9. Cubre el núcleo del Ejercicio 5 del PDF (agente de IA con RAG): crea `apps/ai-agent-service` (puerto 3005) con consulta `POST /agent/ask`, ingesta (`POST /agent/ingest` y semilla; el consumidor `agent.ingest` queda diferido a Evolución), puerto `LlmProvider` (Anthropic + `mock`), embeddings ONNX locales, Qdrant, herramienta REST hacia user-service, rate limit y captura de métricas por petición.
 > Artefactos generados a mano conforme a `schemas/spec-frontmatter.md` y `schemas/task-format.md` (CLI `opsx` no disponible en el sub-agente planner; ver "Plan metadata" en design.md).
 > **Frontera con el cambio 8 (`evaluate-agent-prompts-quality`)**: el cambio 8 es dueño del documento versionado de prompt engineering, `src/prompts/`, el dataset/informe de evaluación y `src/evaluation/`. Aquí solo se implementa la **captura** de métricas (latencia, tokens, coste) por petición y la validación básica de esquema de la salida.
 
@@ -14,7 +14,7 @@
 |---|---|
 | US-EX5-01 | Consulta al agente (`POST /agent/ask`) con RAG, fuentes y respuesta degradada |
 | US-EX5-02 | Puerto `LlmProvider` con adaptador Anthropic, `mock` automático sin clave y coste estimado por entorno |
-| US-EX5-03 | Pipeline de embeddings e ingesta (semilla, admin, evento `role.#`) sobre Qdrant |
+| US-EX5-03 | Pipeline de embeddings e ingesta (semilla y admin; evento `role.#` diferido) sobre Qdrant |
 | US-EX5-04 | Integración con user-service reenviando el JWT del llamante, con lista blanca de campos |
 | US-EX5-05 | Rate limit por usuario, presupuesto de tiempo, concurrencia y circuit breaker hacia el LLM |
 | US-EX5-06 | Captura de métricas por petición (latencia, tokens, coste) y validación de esquema de salida |
@@ -28,7 +28,7 @@ El PDF (Ex5) exige integrar un agente con una API de IA, un RAG con base vectori
 
 1. **Servicio NestJS** `apps/ai-agent-service` con capas ADR-006 (dominio sin SDKs; puertos en aplicación; adaptadores en infraestructura), reutilizando `@toka/jwt-guard`, `@toka/logger`, `@toka/http-client` y `@toka/contracts` del cambio 2.
 2. **`LlmProvider`**: adaptador Anthropic (tool use, prompt caching, `max_retries` y `timeout` explícitos, `AbortSignal`) y adaptador `mock` determinista; selección automática por `ANTHROPIC_API_KEY`; decorador de resiliencia (semáforo de concurrencia + circuit breaker). El modelo viene de `LLM_MODEL` y los precios de `LLM_PRICE_*`; **ningún identificador de modelo ni precio en código ni docs**. Una tarea verifica el uso del SDK y el modelo vigente contra la documentación de Anthropic en el momento de implementar.
-3. **RAG**: `EmbeddingProvider` ONNX MiniLM 384-d local (más `hash` solo en tests), chunker (≤256 tokens, solape ~32), `KnowledgeStore` Qdrant (`knowledge_base`, coseno, upsert por `docId`, filtro `roleScope` obligatorio desde el JWT), ingesta por semilla idempotente, `POST /agent/ingest` (admin) y consumidor `agent.ingest` (`role.#`, idempotente por `eventId`).
+3. **RAG**: `EmbeddingProvider` ONNX MiniLM 384-d local (más `hash` solo en tests), chunker (≤256 tokens, solape ~32), `KnowledgeStore` Qdrant (`knowledge_base`, coseno, upsert por `docId`, filtro `roleScope` obligatorio desde el JWT), ingesta por semilla idempotente, `POST /agent/ingest` (admin). El consumidor `agent.ingest` (`role.#`) se difiere a Evolución (ADR-009 #7 queda como Evolución hasta entonces).
 4. **Consulta**: JWT → rate limit Redis → recuperación filtrada → herramienta de solo lectura hacia user-service con el JWT del llamante (lista blanca `id,name,role,status`) → prompt con datos delimitados → generación con deadline de 30 s → validación de esquema de salida → respuesta con `sources` y `meta`.
 5. **Métricas**: cada petición registra `llm.provider`, `llm.tokensIn`, `llm.tokensOut`, `llm.costEstimate`, `latencyMs`, `ragHits`, `degraded` (sin contenido del prompt) y las devuelve en `meta` para que el cambio 8 las consuma.
 6. **Empaquetado y cierre**: Dockerfile Debian-slim con modelo ONNX horneado; documentación (`08-integracion-ia-rag.md`) y filas EX5 de `docs/traceability.md` a `Implementado`.
@@ -42,7 +42,7 @@ El PDF (Ex5) exige integrar un agente con una API de IA, un RAG con base vectori
 ## Out of scope
 
 - Documento de prompt engineering versionado, `src/prompts/`, dataset y informe de evaluación, `src/evaluation/` y validadores de calidad: cambio 8.
-- Servicio `ai-agent` dentro de `docker-compose.yml`, nginx `/api/agent/`, healthcheck de Qdrant verificado y arranque sin red verificado: cambio 9 (`harden-compose-resilience-security`).
+- Servicio `ai-agent` dentro de `docker-compose.yml`, nginx `/api/agent/`, healthcheck de Qdrant verificado y arranque sin red verificado: cambio 5 (`harden-compose-resilience-security`). También el consumidor `agent.ingest` (Evolución).
 - Ejemplo ejecutable (`scripts/agent-demo.sh`, `docs/agent-example.md`): cambio de entrega documental.
 - Adaptador OpenAI/Azure OpenAI, streaming, embeddings multilingües mayores, reindexado versionado (Evolución declarada en ADR-008/009).
 - Ingesta de datos de usuarios (prohibida por ADR-009) y cualquier herramienta de escritura.

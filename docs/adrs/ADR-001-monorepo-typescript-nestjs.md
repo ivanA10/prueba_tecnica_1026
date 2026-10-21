@@ -24,6 +24,7 @@ Paquetes compartidos permitidos: **solo transversales**.
 - `packages/logger`: configuración de pino y campos de log estándar (ADR-007).
 - `packages/jwt-guard`: guard de validación local de JWT contra JWKS, con consulta de solo lectura del denylist (ADR-003).
 - `packages/contracts`: esquemas de eventos, sobre de evento y DTOs de las APIs internas.
+- `packages/http-client`: cliente HTTP saliente transversal (timeout, backoff y circuit breaker; ADR-005), sin dominio. Lo consumen las capas `infrastructure` de los servicios que hacen llamadas salientes.
 
 **Nunca se comparte dominio**: entidades, agregados, reglas de negocio o repositorios viven dentro de cada servicio. Si dos servicios necesitan el mismo concepto, cada uno lo modela en su contexto delimitado (ADR-002).
 
@@ -57,6 +58,7 @@ Máximo aislamiento de despliegue y propiedad. Por qué se descartó: multiplica
 
 ## Implementación
 
-- **Implementado en `bootstrap-monorepo-platform`**: workspace pnpm, esqueleto de los servicios NestJS, `packages/logger`, `packages/jwt-guard` (estructura) y `packages/contracts` con la regla de compatibilidad.
-- `jwt-guard` completo se entrega en `build-auth-role-services`; los esquemas de eventos se completan en `build-user-audit-services`.
+- **Implementado en `bootstrap-monorepo-platform`**: workspace pnpm, `packages/logger`, `packages/contracts` (con la regla de compatibilidad), `packages/http-client` y `packages/jwt-guard` completo (comportamiento de ADR-003: validación RS256 contra JWKS, `aud`/`iss`, `kid`, denylist por `jti` y usuario, fail-open con timeout corto). La integración con el JWKS real de auth-service se hace en `build-auth-role-services`.
+- **Esqueleto de servicios**: el esqueleto de cada servicio NestJS no se crea en `bootstrap-monorepo-platform`; se crea en el cambio `build-*` que implementa ese servicio.
+- Los esquemas de eventos se completan en `build-user-audit-services`.
 - **Evolución** (no implementado, riesgo aceptado): publicación de `contracts` como paquete versionado en un registro privado y verificación automática de compatibilidad (por ejemplo, un check de esquemas en CI).
