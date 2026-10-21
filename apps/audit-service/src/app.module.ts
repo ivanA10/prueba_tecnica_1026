@@ -11,6 +11,7 @@ import { AUDIT_OPTIONS, AUDIT_REPOSITORY, AuditDocument, AuditProcessor } from '
 import { MongoAuditRepository } from './audit.repository';
 import { AuditEventSchema } from './audit.schema';
 import { loadConfig } from './config';
+import { LOGGER } from './logging';
 
 const config = loadConfig();
 const connection = mongoose.createConnection(config.mongoUrl);
@@ -20,6 +21,7 @@ connection.on('error', () => undefined);
   controllers: [AuditController],
   providers: [
     { provide: AUDIT_CONFIG, useValue: config },
+    { provide: LOGGER, useValue: createLogger({ service: 'audit-service' }) },
     { provide: AUDIT_OPTIONS, useValue: { maxRetries: config.maxRetries } },
     { provide: AMQP_CONNECT, useValue: connect as unknown as AmqpConnect },
     { provide: MONGO_READY, useValue: () => connection.readyState === 1 },
@@ -29,7 +31,8 @@ connection.on('error', () => undefined);
     },
     {
       provide: JWT_GUARD_OPTIONS,
-      useFactory: () => {
+      inject: [LOGGER],
+      useFactory: (logger: ReturnType<typeof createLogger>) => {
         const redis = new Redis(config.redisUrl, { maxRetriesPerRequest: 1, enableOfflineQueue: false });
         redis.on('error', () => undefined);
         return {
@@ -37,7 +40,7 @@ connection.on('error', () => undefined);
           audience: 'toka-api',
           jwksUri: config.jwksUri,
           denylist: new RedisDenylistReader(redis),
-          logger: createLogger({ service: 'audit-service' }),
+          logger,
         };
       },
     },

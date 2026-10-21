@@ -64,6 +64,7 @@ server {
         rewrite ^/api/(.*)$ /$1 break;
         proxy_pass http://$agent_up;
         proxy_read_timeout 40s;
+        client_max_body_size 1m;
         include /etc/nginx/conf.d/proxy_params.inc;
     }
 

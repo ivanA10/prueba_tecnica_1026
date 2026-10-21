@@ -61,6 +61,7 @@ describe('HTTP layer', () => {
     expect(ok.body).toEqual({ items: [], page: 1, limit: 20, total: 0 });
     expect(users.list).toHaveBeenCalledWith(1, 20);
     expect((await request(app.getHttpServer()).get('/users?limit=101').set('x-perms', 'users:read')).status).toBe(400);
+    expect((await request(app.getHttpServer()).get('/users/not-a-uuid').set('x-perms', 'users:read')).status).toBe(400);
   });
 
   it('health is 200; ready is 503 when the broker is down', async () => {

@@ -1,6 +1,15 @@
 import { randomUUID } from 'crypto';
-import { ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { createEnvelope, deterministicEventId, EventActor, PERMISSIONS, RoutingKeys, WILDCARD } from '@toka/contracts';
+import { ConflictException, ForbiddenException, Inject, Injectable, NotFoundException, Optional } from '@nestjs/common';
+import {
+  createEnvelope,
+  deterministicEventId,
+  EventActor,
+  hasPermission,
+  PERMISSIONS,
+  RoutingKeys,
+  WILDCARD,
+} from '@toka/contracts';
+import { DEFAULT_ADMIN_ROLE_ID, RoleConfig } from '../config/config';
 import { getCorrelationId } from '@toka/logger';
 import { DuplicateRoleError, Role, samePermissions, VersionConflictError } from '../domain/role';
 import { EventPublisher, RoleCache, RoleData, RoleRepository, TOKENS } from './ports';
@@ -18,13 +27,32 @@ export class RoleService {
     @Inject(TOKENS.Roles) private readonly roles: RoleRepository,
     @Inject(TOKENS.Cache) private readonly cache: RoleCache,
     @Inject(TOKENS.Publisher) private readonly publisher: EventPublisher,
-  ) {}
+    @Optional() @Inject(TOKENS.Config) config?: Pick<RoleConfig, 'adminRoleId'>,
+  ) {
+    this.adminRoleId = config?.adminRoleId ?? DEFAULT_ADMIN_ROLE_ID;
+  }
+
+  private readonly adminRoleId: string;
 
   private correlation(): string {
     return getCorrelationId() ?? randomUUID();
   }
 
-  async create(data: RoleData, actor: EventActor, id: string = randomUUID()): Promise<Role> {
+  /**
+   * No privilege escalation: every permission in the resulting role must be held by the actor
+   * (`*` is held only by an actor that itself has `*`). The 'system' actor (seeding) is exempt.
+   */
+  private assertCanGrant(actor: EventActor, actorPermissions: readonly string[], requested: readonly string[]): void {
+    if (actor === 'system') return;
+    if (actorPermissions.includes(WILDCARD)) return;
+    if (requested.some((p) => p === WILDCARD || !hasPermission(actorPermissions, p))) {
+      throw new ForbiddenException('permission_escalation');
+    }
+  }
+
+  /** `actorPermissions` defaults to none (fail-closed); only the 'system' actor may omit it. */
+  async create(data: RoleData, actor: EventActor, actorPermissions: readonly string[] = [], id: string = randomUUID()): Promise<Role> {
+    this.assertCanGrant(actor, actorPermissions, data.permissions);
     let role: Role;
     try {
       role = await this.roles.create({ id, ...data, version: 1 });
@@ -44,9 +72,20 @@ export class RoleService {
     return role;
   }
 
-  async update(id: string, data: RoleData, actor: EventActor, expectedVersion?: number): Promise<Role> {
+  async update(
+    id: string,
+    data: RoleData,
+    actor: EventActor,
+    actorPermissions: readonly string[] = [],
+    expectedVersion?: number,
+  ): Promise<Role> {
     const before = await this.roles.findById(id);
     if (!before) throw new NotFoundException('role_not_found');
+    // The seeded admin role is immutable (name and permissions; description edits are allowed).
+    if (id === this.adminRoleId && (data.name !== before.name || !samePermissions(before.permissions, data.permissions))) {
+      throw new ForbiddenException('admin_role_immutable');
+    }
+    this.assertCanGrant(actor, actorPermissions, data.permissions);
     let role: Role | null;
     try {
       role = await this.roles.update(id, data, expectedVersion);
@@ -98,7 +137,7 @@ export class RoleService {
   private async seedRole(id: string, name: string, description: string, permissions: string[]): Promise<void> {
     if (await this.roles.findById(id)) return;
     try {
-      await this.create({ name, description, permissions }, 'system', id);
+      await this.create({ name, description, permissions }, 'system', [], id);
     } catch (err) {
       if (err instanceof ConflictException) return; // name already taken (e.g. created manually)
       throw err;

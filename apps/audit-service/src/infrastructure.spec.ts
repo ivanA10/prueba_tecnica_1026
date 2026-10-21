@@ -62,8 +62,12 @@ describe('AuditConsumer', () => {
     bindQueue: jest.fn().mockResolvedValue({}),
     prefetch: jest.fn(),
     consume: jest.fn().mockResolvedValue({}),
-    publish: jest.fn().mockReturnValue(true),
+    publish: jest.fn((_e, _k, _c, _o, cb: (e: unknown) => void) => {
+      cb(null);
+      return true;
+    }),
     ack: jest.fn(),
+    nack: jest.fn(),
     close: jest.fn(),
   });
   const config = { rabbitmqUrl: 'amqp://x', retryTtlMs: 5000, maxRetries: 3, prefetch: 10 } as never;
@@ -74,16 +78,42 @@ describe('AuditConsumer', () => {
     const ch = channel();
     const m = msg({ 'x-retry-count': 0 });
     await c.handle(ch, m);
-    expect(ch.publish).toHaveBeenCalledWith('toka.events.dlx', 'audit.events.retry', m.content, expect.objectContaining({ headers: { 'x-retry-count': 1 } }));
+    expect(ch.publish).toHaveBeenCalledWith('toka.events.dlx', 'audit.events.retry', m.content, expect.objectContaining({ headers: { 'x-retry-count': 1 } }), expect.any(Function));
     expect(ch.ack).toHaveBeenCalledWith(m);
     await c.handle(ch, msg({ 'x-retry-count': 3 }));
     expect(ch.publish.mock.calls[1][1]).toBe('audit.events.dlq');
     expect(ch.publish.mock.calls[1][3]).toMatchObject({ headers: { 'x-error': 'boom', 'x-failed-at': expect.any(String) } });
   });
 
+  it('nacks with requeue (no ack) when the retry republish is not confirmed; acks only after confirm', async () => {
+    const processor = { process: jest.fn().mockResolvedValue({ action: 'retry' }) };
+    const c = new AuditConsumer(processor as never, config, jest.fn());
+    const ch = channel();
+    const order: string[] = [];
+    ch.publish.mockImplementationOnce((_e, _k, _c, _o, cb) => {
+      cb(new Error('nacked by broker'));
+      return true;
+    });
+    const m = msg();
+    await c.handle(ch, m);
+    expect(ch.ack).not.toHaveBeenCalled();
+    expect(ch.nack).toHaveBeenCalledWith(m, false, true);
+    ch.publish.mockImplementationOnce((_e, _k, _c, _o, cb) => {
+      order.push('publish');
+      setImmediate(() => {
+        order.push('confirm');
+        cb(null);
+      });
+      return true;
+    });
+    ch.ack.mockImplementationOnce(() => void order.push('ack'));
+    await c.handle(ch, m);
+    expect(order).toEqual(['publish', 'confirm', 'ack']);
+  });
+
   it('declares retry/DLQ topology, binds user/auth/role and reports connected', async () => {
     const ch = channel();
-    const conn = { createChannel: jest.fn().mockResolvedValue(ch), close: jest.fn().mockResolvedValue(undefined), on: jest.fn() };
+    const conn = { createConfirmChannel: jest.fn().mockResolvedValue(ch), close: jest.fn().mockResolvedValue(undefined), on: jest.fn() };
     const c = new AuditConsumer({} as never, config, jest.fn().mockResolvedValue(conn));
     await c.start();
     expect(c.isConnected()).toBe(true);

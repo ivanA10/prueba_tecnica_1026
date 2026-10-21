@@ -1,4 +1,4 @@
-import { ConflictException, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
+import { ConflictException, ForbiddenException, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import {
   AuthCredentialsClient,
   CredentialsConflictError,
@@ -73,7 +73,7 @@ function setup(opts: { clock?: () => number } = {}) {
 describe('UsersService signup saga', () => {
   it('happy path: PENDING -> role -> credentials -> ACTIVE with user.created v2, no password stored', async () => {
     const { repo, auth, svc } = setup();
-    const u = await svc.create(input, actor, 'cid');
+    const u = await svc.create(input, actor, 'cid', ['*']);
     expect(u.status).toBe('ACTIVE');
     expect(u.version).toBe(2);
     expect(auth.putCredentials).toHaveBeenCalledWith(
@@ -89,16 +89,16 @@ describe('UsersService signup saga', () => {
 
   it('duplicate email -> 409 without calling role/auth', async () => {
     const { roles, svc } = setup();
-    await svc.create(input, actor, 'c');
+    await svc.create(input, actor, 'c', ['*']);
     roles.getRole.mockClear();
-    await expect(svc.create(input, actor, 'c')).rejects.toBeInstanceOf(ConflictException);
+    await expect(svc.create(input, actor, 'c', ['*'])).rejects.toBeInstanceOf(ConflictException);
     expect(roles.getRole).not.toHaveBeenCalled();
   });
 
   it('role failure -> DELETE credentials BEFORE deletePending, then 503', async () => {
     const { repo, roles, svc } = setup();
     roles.getRole.mockRejectedValue(new DependencyUnavailableError('down'));
-    await expect(svc.create(input, actor, 'c')).rejects.toBeInstanceOf(ServiceUnavailableException);
+    await expect(svc.create(input, actor, 'c', ['*'])).rejects.toBeInstanceOf(ServiceUnavailableException);
     expect(repo.calls).toEqual(['createPending', 'deleteCredentials', 'deletePending']);
     expect(repo.users.size).toBe(0);
   });
@@ -107,7 +107,7 @@ describe('UsersService signup saga', () => {
     const { repo, roles, auth, svc } = setup();
     roles.getRole.mockRejectedValue(new RoleNotFoundError('r1'));
     auth.deleteCredentials.mockRejectedValue(new DependencyUnavailableError('down'));
-    await expect(svc.create(input, actor, 'c')).rejects.toBeInstanceOf(ServiceUnavailableException);
+    await expect(svc.create(input, actor, 'c', ['*'])).rejects.toBeInstanceOf(ServiceUnavailableException);
     expect(repo.calls).not.toContain('deletePending');
     expect([...repo.users.values()][0].status).toBe('PENDING');
   });
@@ -115,14 +115,14 @@ describe('UsersService signup saga', () => {
   it('auth 409 -> compensates and answers 409', async () => {
     const { repo, auth, svc } = setup();
     auth.putCredentials.mockRejectedValue(new CredentialsConflictError('u'));
-    await expect(svc.create(input, actor, 'c')).rejects.toBeInstanceOf(ConflictException);
+    await expect(svc.create(input, actor, 'c', ['*'])).rejects.toBeInstanceOf(ConflictException);
     expect(repo.users.size).toBe(0);
   });
 
   it('exhausted budget: no call is attempted, compensates, 503', async () => {
     let calls = 0;
     const { roles, repo, svc } = setup({ clock: () => (calls++ === 0 ? 0 : 20000) });
-    await expect(svc.create(input, actor, 'c')).rejects.toBeInstanceOf(ServiceUnavailableException);
+    await expect(svc.create(input, actor, 'c', ['*'])).rejects.toBeInstanceOf(ServiceUnavailableException);
     expect(roles.getRole).not.toHaveBeenCalled();
     expect(repo.calls).toContain('deletePending');
   });
@@ -131,10 +131,10 @@ describe('UsersService signup saga', () => {
 describe('UsersService lifecycle', () => {
   it('update DISABLED bumps version + user.updated; delete emits user.deleted; role assign emits role payload', async () => {
     const { repo, svc } = setup();
-    const u = await svc.create(input, actor, 'c');
+    const u = await svc.create(input, actor, 'c', ['*']);
     repo.events.length = 0;
     await svc.update(u.id, { status: 'DISABLED' }, actor, 'c');
-    await svc.assignRole(u.id, 'r1', actor, 'c');
+    await svc.assignRole(u.id, 'r1', actor, 'c', ['*']);
     await svc.remove(u.id, actor, 'c');
     expect(repo.events).toMatchObject([
       { type: 'user.updated', aggregateVersion: 3, payload: { status: 'DISABLED' } },
@@ -150,11 +150,25 @@ describe('UsersService lifecycle', () => {
 
   it('assignRole with unknown role -> 404 and no event', async () => {
     const { repo, roles, svc } = setup();
-    const u = await svc.create(input, actor, 'c');
+    const u = await svc.create(input, actor, 'c', ['*']);
     repo.events.length = 0;
     roles.getRole.mockRejectedValue(new RoleNotFoundError('x'));
-    await expect(svc.assignRole(u.id, 'x', actor, 'c')).rejects.toBeInstanceOf(NotFoundException);
+    await expect(svc.assignRole(u.id, 'x', actor, 'c', ['*'])).rejects.toBeInstanceOf(NotFoundException);
     expect(repo.events).toHaveLength(0);
+  });
+
+  it('no escalation: assigning/creating with a role beyond the actor permissions -> 403; self role change -> 403', async () => {
+    const { repo, roles, svc } = setup();
+    const u = await svc.create(input, actor, 'c', ['*']);
+    repo.events.length = 0;
+    roles.getRole.mockResolvedValue({ id: 'r2', name: 'admin', version: 1, permissions: ['*'] });
+    const writer = ['users:write', 'users:read'];
+    await expect(svc.assignRole(u.id, 'r2', actor, 'c', writer)).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(svc.create({ ...input, email: 'b@x.io', roleId: 'r2' }, actor, 'c', writer)).rejects.toBeInstanceOf(ForbiddenException);
+    roles.getRole.mockResolvedValue({ id: 'r3', name: 'low', version: 1, permissions: ['users:read'] });
+    await expect(svc.assignRole(u.id, 'r3', { userId: u.id, roles: [] }, 'c', writer)).rejects.toBeInstanceOf(ForbiddenException);
+    expect(repo.events).toHaveLength(0);
+    await expect(svc.assignRole(u.id, 'r3', actor, 'c', writer)).resolves.toBeDefined();
   });
 
   it('reconcile only compensates stale PENDING and keeps those whose DELETE fails', async () => {

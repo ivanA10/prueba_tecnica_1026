@@ -19,6 +19,7 @@ export interface UserConfig {
   reconcileIntervalMs: number;
   outboxPollMs: number;
   outboxBatch: number;
+  outboxMaxAttempts: number;
   adminSeedEmail?: string;
   adminSeedPassword?: string;
   adminSeedRoleId: string;
@@ -41,6 +42,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): UserConfig {
     reconcileIntervalMs: num(env.RECONCILE_INTERVAL_MS, 30000),
     outboxPollMs: num(env.OUTBOX_POLL_MS, 1000),
     outboxBatch: num(env.OUTBOX_BATCH, 50),
+    outboxMaxAttempts: num(env.OUTBOX_MAX_ATTEMPTS, 10),
     adminSeedEmail: env.ADMIN_SEED_EMAIL || undefined,
     adminSeedPassword: env.ADMIN_SEED_PASSWORD || undefined,
     adminSeedRoleId: env.ADMIN_SEED_ROLE_ID || '00000000-0000-4000-8000-000000000001',

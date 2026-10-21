@@ -131,6 +131,7 @@ describe('role-service', () => {
     // ...and that name is reserved: it cannot be created.
     const reserved = await request(app.getHttpServer()).post('/roles').set('x-user', as(['admin'])).send({ name: ' Service ', permissions: [] });
     expect(reserved.status).toBe(400);
+    expect((await request(app.getHttpServer()).get('/roles/not-a-uuid').set('x-user', svcToken())).status).toBe(400);
     expect((await request(app.getHttpServer()).get('/health')).status).toBe(200);
     const reader = as(['operador'], ['roles:read']);
     expect((await request(app.getHttpServer()).post('/roles').set('x-user', reader).send(body)).status).toBe(403);
@@ -143,6 +144,34 @@ describe('role-service', () => {
     expect(bad.status).toBe(400);
     const ok = await request(app.getHttpServer()).post('/roles').set('x-user', admin).send({ name: 'x', permissions: ['*'] });
     expect(ok.status).toBe(201);
+  });
+
+  it('no privilege escalation: update/create beyond the actor permissions -> 403 permission_escalation', async () => {
+    const editor = as(['editor'], ['roles:read', 'roles:write']);
+    const own = await service.create({ name: 'editor', description: null, permissions: ['roles:read', 'roles:write'] }, 'system');
+    const up = await request(app.getHttpServer()).put(`/roles/${own.id}`).set('x-user', editor).send({ name: 'editor', permissions: ['*'] });
+    expect(up.status).toBe(403);
+    expect(up.body.message).toBe('permission_escalation');
+    expect(repo.items.get(own.id)?.permissions).toEqual(['roles:read', 'roles:write']);
+    const cr = await request(app.getHttpServer()).post('/roles').set('x-user', editor).send({ name: 'x', permissions: ['users:write'] });
+    expect(cr.status).toBe(403);
+    // subset (removing permissions) is allowed; an actor with * may grant anything
+    const down = await request(app.getHttpServer()).put(`/roles/${own.id}`).set('x-user', editor).send({ name: 'editor', permissions: ['roles:read'] });
+    expect(down.status).toBe(200);
+    const star = await request(app.getHttpServer()).post('/roles').set('x-user', as(['admin'])).send({ name: 'y', permissions: ['*', 'users:write'] });
+    expect(star.status).toBe(201);
+  });
+
+  it('the seeded admin role is immutable: rename or emptying -> 403 admin_role_immutable', async () => {
+    await service.seedAdmin(ADMIN_ID);
+    const admin = as(['admin']);
+    const rename = await request(app.getHttpServer()).put(`/roles/${ADMIN_ID}`).set('x-user', admin).send({ name: 'root', permissions: ['*'] });
+    expect(rename.status).toBe(403);
+    expect(rename.body.message).toBe('admin_role_immutable');
+    const empty = await request(app.getHttpServer()).put(`/roles/${ADMIN_ID}`).set('x-user', admin).send({ name: 'admin', permissions: [] });
+    expect(empty.body.message).toBe('admin_role_immutable');
+    const desc = await request(app.getHttpServer()).put(`/roles/${ADMIN_ID}`).set('x-user', admin).send({ name: 'admin', description: 'd', permissions: ['*'] });
+    expect(desc.status).toBe(200);
   });
 
   it('seeds the admin role idempotently and re-sync emits deterministic role.updated events', async () => {

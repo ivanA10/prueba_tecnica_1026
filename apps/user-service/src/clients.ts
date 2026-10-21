@@ -39,13 +39,39 @@ export class ServiceTokenProvider {
   }
 }
 
+export interface WarnLogger {
+  warn(obj: object, msg?: string): void;
+}
+
 const unavailable = (err: unknown): DependencyUnavailableError =>
   new DependencyUnavailableError(err instanceof Error ? err.message : String(err));
+
+/** Logs a failed downstream call (ids and error message only, never credentials). */
+function logDependencyFailure(
+  logger: WarnLogger | undefined,
+  dependency: string,
+  operation: string,
+  err: unknown,
+  correlationId?: string,
+): void {
+  logger?.warn(
+    {
+      event: 'dependency.call_failed',
+      dependency,
+      operation,
+      correlationId,
+      status: err instanceof HttpStatusError ? err.status : undefined,
+      error: err instanceof Error ? err.message : String(err),
+    },
+    'dependency call failed',
+  );
+}
 
 export class HttpRoleClient implements RoleClient {
   constructor(
     private readonly http: Pick<HttpClient, 'request'>,
     private readonly tokens: Pick<ServiceTokenProvider, 'getToken'>,
+    private readonly logger?: WarnLogger,
   ) {}
 
   async getRole(roleId: string, budgetMs: number | undefined, correlationId?: string): Promise<RoleInfo> {
@@ -63,6 +89,7 @@ export class HttpRoleClient implements RoleClient {
       };
     } catch (err) {
       if (err instanceof HttpStatusError && err.status === 404) throw new RoleNotFoundError(roleId);
+      logDependencyFailure(this.logger, 'role-service', 'getRole', err, correlationId);
       throw unavailable(err);
     }
   }
@@ -72,6 +99,7 @@ export class HttpAuthClient implements AuthCredentialsClient {
   constructor(
     private readonly http: Pick<HttpClient, 'request'>,
     private readonly tokens: Pick<ServiceTokenProvider, 'getToken'>,
+    private readonly logger?: WarnLogger,
   ) {}
 
   async putCredentials(
@@ -92,6 +120,7 @@ export class HttpAuthClient implements AuthCredentialsClient {
       });
     } catch (err) {
       if (err instanceof HttpStatusError && err.status === 409) throw new CredentialsConflictError(userId);
+      logDependencyFailure(this.logger, 'auth-service', 'putCredentials', err, correlationId);
       throw unavailable(err);
     }
   }
@@ -107,6 +136,7 @@ export class HttpAuthClient implements AuthCredentialsClient {
       });
     } catch (err) {
       if (err instanceof HttpStatusError && err.status === 404) return;
+      logDependencyFailure(this.logger, 'auth-service', 'deleteCredentials', err, correlationId);
       throw unavailable(err);
     }
   }

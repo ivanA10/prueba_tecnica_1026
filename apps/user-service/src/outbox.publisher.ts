@@ -18,6 +18,9 @@ export const EVENT_PUBLISHER = 'EVENT_PUBLISHER';
 
 interface OutboxRow {
   seq: bigint;
+  eventId: string;
+  aggregateId: string;
+  attempts: number;
   type: string;
   envelope: EventEnvelope<unknown>;
 }
@@ -31,7 +34,7 @@ export class OutboxPublisher implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly prisma: PrismaClient,
     @Inject(EVENT_PUBLISHER) private readonly publisher: EventPublisher,
-    @Inject(USER_CONFIG) private readonly config: Pick<UserConfig, 'outboxBatch' | 'outboxPollMs'>,
+    @Inject(USER_CONFIG) private readonly config: Pick<UserConfig, 'outboxBatch' | 'outboxPollMs' | 'outboxMaxAttempts'>,
   ) {}
 
   onModuleInit(): void {
@@ -43,7 +46,12 @@ export class OutboxPublisher implements OnModuleInit, OnModuleDestroy {
     if (this.timer) clearInterval(this.timer);
   }
 
-  /** Publishes pending rows in `seq` order; stops (leaving rows pending) on first broker failure. */
+  /**
+   * Publishes pending rows in `seq` order. If the broker is unreachable the batch stops (rows stay
+   * pending, attempts not counted). If the broker is up but a row keeps failing (poison), attempts
+   * are counted; at `outboxMaxAttempts` the row is marked dead (`failed_at`) and skipped. While a row
+   * is failing, later rows of the SAME aggregate are held back (ordering) but other aggregates go on.
+   */
   async flush(): Promise<number> {
     if (this.running) return 0;
     this.running = true;
@@ -51,17 +59,35 @@ export class OutboxPublisher implements OnModuleInit, OnModuleDestroy {
       return await this.prisma.$transaction(
         async (tx) => {
           const rows = await tx.$queryRaw<OutboxRow[]>`
-            SELECT seq, type, envelope FROM outbox_events
-            WHERE published_at IS NULL ORDER BY seq LIMIT ${this.config.outboxBatch}
+            SELECT seq, event_id AS "eventId", aggregate_id AS "aggregateId", attempts, type, envelope
+            FROM outbox_events
+            WHERE published_at IS NULL AND failed_at IS NULL ORDER BY seq LIMIT ${this.config.outboxBatch}
             FOR UPDATE SKIP LOCKED`;
           let published = 0;
+          const blocked = new Set<string>();
           for (const row of rows) {
+            if (blocked.has(row.aggregateId)) continue;
             try {
               await this.publisher.publish(row.type, row.envelope);
             } catch (err) {
-              this.log.warn(`outbox publish failed, will retry: ${(err as Error).message}`);
-              await tx.outboxEvent.update({ where: { seq: row.seq }, data: { attempts: { increment: 1 } } });
-              break;
+              const message = (err as Error).message;
+              if (!(await this.publisher.isReady().catch(() => false))) {
+                this.log.warn(`outbox publish failed (broker unavailable), will retry: ${message}`);
+                break;
+              }
+              const attempts = (Number(row.attempts) || 0) + 1;
+              if (attempts >= this.config.outboxMaxAttempts) {
+                await tx.outboxEvent.update({
+                  where: { seq: row.seq },
+                  data: { attempts: { increment: 1 }, failedAt: new Date() },
+                });
+                this.log.error({ event: 'outbox.dead', eventId: row.eventId, type: row.type, attempts, error: message });
+              } else {
+                this.log.warn(`outbox publish failed (attempt ${attempts}), will retry: ${message}`);
+                await tx.outboxEvent.update({ where: { seq: row.seq }, data: { attempts: { increment: 1 } } });
+                blocked.add(row.aggregateId);
+              }
+              continue;
             }
             await tx.outboxEvent.update({ where: { seq: row.seq }, data: { publishedAt: new Date() } });
             published++;

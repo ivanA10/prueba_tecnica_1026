@@ -40,6 +40,7 @@ export class RolesController {
     const role = await this.roles.create(
       { name: dto.name, description: dto.description ?? null, permissions: dto.permissions },
       { userId: req.user.sub, roles: req.user.roles },
+      req.user.permissions,
     );
     return toDto(role);
   }
@@ -65,6 +66,7 @@ export class RolesController {
       id,
       { name: dto.name, description: dto.description ?? null, permissions: dto.permissions },
       { userId: req.user.sub, roles: req.user.roles },
+      req.user.permissions,
       dto.version,
     );
     return toDto(role);

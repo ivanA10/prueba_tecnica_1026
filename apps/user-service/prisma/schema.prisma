@@ -38,6 +38,7 @@ model OutboxEvent {
   occurredAt       DateTime  @map("occurred_at")
   publishedAt      DateTime? @map("published_at")
   attempts         Int       @default(0)
+  failedAt         DateTime? @map("failed_at")
 
   @@index([publishedAt, seq])
   @@map("outbox_events")
